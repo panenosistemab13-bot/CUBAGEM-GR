@@ -21,7 +21,8 @@ import {
   Edit,
   X,
   Save,
-  FileText
+  FileText,
+  Clock
 } from 'lucide-react';
 import { ref, push, set, onValue, remove, update } from 'firebase/database';
 import { rtdb as db, handleFirestoreError, OperationType } from '../firebase';
@@ -349,6 +350,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [mobileTab, setMobileTab] = useState<'lista' | 'importar'>('lista');
+  const [mobileCubagemTab, setMobileCubagemTab] = useState<'lista' | 'importar'>('lista');
   const [activeSubTab, setActiveSubTab] = useState<'patio' | 'disponibilidade' | 'iscas' | 'cubagem'>('cubagem');
   const [disponibilidadeGreeting, setDisponibilidadeGreeting] = useState<'bom dia' | 'boa tarde' | 'boa noite'>(getAutoGreeting);
   const [disponibilidadeInput, setDisponibilidadeInput] = useState('');
@@ -1761,7 +1763,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       </div>
 
       {/* Mobile Tab Selector */}
-      <div className="hidden w-full lg:hidden bg-[#e8d5bc]/80 p-1 border-3 border-[#5c3c24]/25 rounded-2xl shadow-inner relative z-10 mt-4 shrink-0">
+      <div className="flex w-full lg:hidden bg-[#e8d5bc]/80 p-1 border-3 border-[#5c3c24]/25 rounded-2xl shadow-inner relative z-10 mt-4 shrink-0 items-center gap-1">
         <button
           onClick={() => setMobileTab('lista')}
           className={cn(
@@ -2608,10 +2610,39 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         </div>
       ) : (
         /* ================= CUBAGEM CONSOLE ================= */
-        <div className="w-full relative z-10 max-w-[94rem] mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0 animate-fade-in text-left">
-          
-          {/* LEFT COLUMN: CONTROLS & IMPORT PROGRESS */}
-          <div className="lg:col-span-5 h-full flex flex-col gap-6">
+        <>
+          {/* Mobile Tab Selector for Cubagem */}
+          <div className="flex w-full lg:hidden bg-[#e8d5bc]/80 p-1 border-3 border-[#5c3c24]/25 rounded-2xl shadow-inner relative z-10 mt-4 mb-2 shrink-0 items-center gap-1">
+            <button
+              onClick={() => setMobileCubagemTab('lista')}
+              className={cn(
+                "flex-1 py-2.5 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2",
+                mobileCubagemTab === 'lista'
+                  ? "bg-gradient-to-b from-[#a27a5d] to-[#835835] text-[#fdefd1] shadow-md border-2 border-[#5c3c24]/40"
+                  : "text-[#5c3c24] hover:bg-[#debfa0]/40"
+              )}
+            >
+              <FileText size={14} className="stroke-[2.5]" />
+              <span>Cubagens Salvas ({cubagemData.length})</span>
+            </button>
+            <button
+              onClick={() => setMobileCubagemTab('importar')}
+              className={cn(
+                "flex-1 py-2.5 text-[10px] font-black uppercase tracking-[0.15em] rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2",
+                mobileCubagemTab === 'importar'
+                  ? "bg-gradient-to-b from-[#a27a5d] to-[#835835] text-[#fdefd1] shadow-md border-2 border-[#5c3c24]/40"
+                  : "text-[#5c3c24] hover:bg-[#debfa0]/40"
+              )}
+            >
+              <Plus size={14} className="stroke-[2.5]" />
+              <span>Inserir / Importar</span>
+            </button>
+          </div>
+
+          <div className="w-full relative z-10 max-w-[94rem] mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0 animate-fade-in text-left">
+            
+            {/* LEFT COLUMN: CONTROLS & IMPORT PROGRESS */}
+            <div className={cn("lg:col-span-5 h-full flex flex-col gap-6", mobileCubagemTab === 'importar' ? "flex" : "hidden lg:flex")}>
             {/* WoodenPlaque for Cubagem Controls */}
             <WoodenPlaque className="flex flex-col gap-5 p-6 h-full" screwSize="w-2.5 h-2.5">
               
@@ -2881,7 +2912,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
           </div>
 
           {/* RIGHT COLUMN: MODERN DATABASE TABLE */}
-          <div className="lg:col-span-7 h-full flex flex-col">
+          <div className={cn("lg:col-span-7 h-full flex flex-col", mobileCubagemTab === 'lista' ? "flex" : "hidden lg:flex")}>
             
             {/* WoodenPlaque Table Container */}
             <WoodenPlaque className="flex flex-col p-6 h-full" screwSize="w-2.5 h-2.5">
@@ -2998,133 +3029,272 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                   }
 
                   return (
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-[#f0dfcc]/50 border-b border-[#5c3c24]/30">
-                          <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Cavalo (Placa)</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Carreta (Placa)</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Cubagem (M³)</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider hidden md:table-cell">Registrado Em</th>
-                          {!isReadOnly && <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#5c3c24]/10 bg-[#fcfaf7]/40">
+                    <>
+                      {/* Desktop Table View */}
+                      <div className="hidden md:block">
+                        <table className="w-full text-left border-collapse">
+                          <thead>
+                            <tr className="bg-[#f0dfcc]/50 border-b border-[#5c3c24]/30">
+                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Cavalo (Placa)</th>
+                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Carreta (Placa)</th>
+                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Cubagem (M³)</th>
+                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider hidden md:table-cell">Registrado Em</th>
+                              {!isReadOnly && <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-[#5c3c24]/10 bg-[#fcfaf7]/40">
+                            {filtered.map(item => {
+                              const isEditing = editingCubagemId === item.id;
+                              return (
+                                <tr key={item.id} className="hover:bg-[#f0dfcc]/25 transition-colors">
+                                  {isEditing ? (
+                                    <>
+                                      <td className="px-4 py-3">
+                                        <input 
+                                          type="text"
+                                          value={editingCavalo}
+                                          onChange={(e) => setEditingCavalo(e.target.value)}
+                                          className="w-full max-w-[120px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <input 
+                                          type="text"
+                                          value={editingCarreta}
+                                          onChange={(e) => setEditingCarreta(e.target.value)}
+                                          className="w-full max-w-[120px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-3">
+                                        <input 
+                                          type="text"
+                                          value={editingM3}
+                                          onChange={(e) => setEditingM3(e.target.value)}
+                                          className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                        />
+                                      </td>
+                                      <td className="px-4 py-3 hidden md:table-cell text-[10px] font-bold text-[#5c3c24]/70">
+                                        Em edição...
+                                      </td>
+                                      <td className="px-4 py-3 text-center">
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          <button 
+                                            type="button"
+                                            onClick={() => handleSaveEditCubagem(item.id)}
+                                            className="w-8 h-8 flex items-center justify-center bg-gradient-to-b from-[#ca1a20] to-[#800609] hover:from-[#e4252c] hover:to-[#990a0d] text-[#fdefd1] rounded-lg transition-colors shadow-sm cursor-pointer border border-[#ff3e47]/20"
+                                            title="Salvar"
+                                          >
+                                            <Save size={14} />
+                                          </button>
+                                          <button 
+                                            type="button"
+                                            onClick={handleCancelEditCubagem}
+                                            className="w-8 h-8 flex items-center justify-center bg-gradient-to-b from-[#5c3c24] to-[#3a2517] hover:from-[#734c2f] hover:to-[#4e321e] text-white rounded-lg transition-colors shadow-sm cursor-pointer border border-white/10"
+                                            title="Cancelar"
+                                          >
+                                            <X size={14} />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <td className="px-5 py-3">
+                                        <LicensePlate plate={item.cavalo} type="cavalo" />
+                                      </td>
+                                      <td className="px-5 py-3">
+                                        <LicensePlate plate={item.carreta} type="carreta" />
+                                      </td>
+                                      <td className="px-5 py-3">
+                                        <div className="inline-flex items-center px-3.5 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-bold font-mono text-xs sm:text-sm shadow-inner">
+                                          {item.m3} M³
+                                        </div>
+                                      </td>
+                                      <td className="px-5 py-3 hidden md:table-cell text-[10px] font-bold text-[#5c3c24]/80">
+                                        {new Date(item.inseridoEm).toLocaleString('pt-BR', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          year: 'numeric',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </td>
+                                      {!isReadOnly && (
+                                        <td className="px-5 py-3 text-center">
+                                          <div className="flex items-center justify-center gap-2">
+                                            <button 
+                                              type="button"
+                                              onClick={() => {
+                                                setEditingCubagemId(item.id);
+                                                setEditingCavalo(item.cavalo);
+                                                setEditingCarreta(item.carreta);
+                                                setEditingM3(item.m3);
+                                              }}
+                                              className="w-8 h-8 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
+                                              title="Editar Registro"
+                                            >
+                                              <Edit size={13} />
+                                            </button>
+                                            <button 
+                                              type="button"
+                                              onClick={() => handleDeleteCubagem(item.id)}
+                                              className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
+                                              title="Excluir Registro"
+                                            >
+                                              <Trash2 size={13} />
+                                            </button>
+                                          </div>
+                                        </td>
+                                      )}
+                                    </>
+                                  )}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Mobile Card List View - 100% optimized for phone interaction */}
+                      <div className="block md:hidden p-3.5 space-y-4">
                         {filtered.map(item => {
                           const isEditing = editingCubagemId === item.id;
                           return (
-                            <tr key={item.id} className="hover:bg-[#f0dfcc]/25 transition-colors">
+                            <div 
+                              key={item.id}
+                              className="bg-[#fcf9f2] border-2 border-[#5c3c24]/20 rounded-2xl p-4 shadow-md flex flex-col gap-4 relative hover:border-[#8c060a]/40 transition-colors text-left font-sans"
+                            >
                               {isEditing ? (
-                                <>
-                                  <td className="px-4 py-3">
-                                    <input 
-                                      type="text"
-                                      value={editingCavalo}
-                                      onChange={(e) => setEditingCavalo(e.target.value)}
-                                      className="w-full max-w-[120px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
-                                    />
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <input 
-                                      type="text"
-                                      value={editingCarreta}
-                                      onChange={(e) => setEditingCarreta(e.target.value)}
-                                      className="w-full max-w-[120px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
-                                    />
-                                  </td>
-                                  <td className="px-4 py-3">
-                                    <input 
-                                      type="text"
-                                      value={editingM3}
-                                      onChange={(e) => setEditingM3(e.target.value)}
-                                      className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
-                                    />
-                                  </td>
-                                  <td className="px-4 py-3 hidden md:table-cell text-[10px] font-bold text-[#5c3c24]/70">
-                                    Em edição...
-                                  </td>
-                                  <td className="px-4 py-3 text-center">
-                                    <div className="flex items-center justify-center gap-1.5">
-                                      <button 
-                                        type="button"
-                                        onClick={() => handleSaveEditCubagem(item.id)}
-                                        className="w-8 h-8 flex items-center justify-center bg-gradient-to-b from-[#ca1a20] to-[#800609] hover:from-[#e4252c] hover:to-[#990a0d] text-[#fdefd1] rounded-lg transition-colors shadow-sm cursor-pointer border border-[#ff3e47]/20"
-                                        title="Salvar"
-                                      >
-                                        <Save size={14} />
-                                      </button>
-                                      <button 
-                                        type="button"
-                                        onClick={handleCancelEditCubagem}
-                                        className="w-8 h-8 flex items-center justify-center bg-gradient-to-b from-[#5c3c24] to-[#3a2517] hover:from-[#734c2f] hover:to-[#4e321e] text-white rounded-lg transition-colors shadow-sm cursor-pointer border border-white/10"
-                                        title="Cancelar"
-                                      >
-                                        <X size={14} />
-                                      </button>
+                                <div className="space-y-4">
+                                  <div className="text-xs font-black text-[#8c060a] uppercase tracking-wider border-b border-[#5c3c24]/10 pb-1 flex items-center gap-1.5">
+                                    <Edit size={13} />
+                                    <span>Editar Cubagem</span>
+                                  </div>
+                                  
+                                  <div className="space-y-3">
+                                    <div>
+                                      <label className="text-[9px] font-black text-[#5c3c24] uppercase tracking-wider pl-1">Placa Cavalo:</label>
+                                      <input 
+                                        type="text"
+                                        value={editingCavalo}
+                                        onChange={(e) => setEditingCavalo(e.target.value)}
+                                        className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                      />
                                     </div>
-                                  </td>
-                                </>
+                                    <div>
+                                      <label className="text-[9px] font-black text-[#5c3c24] uppercase tracking-wider pl-1">Placa Carreta:</label>
+                                      <input 
+                                        type="text"
+                                        value={editingCarreta}
+                                        onChange={(e) => setEditingCarreta(e.target.value)}
+                                        className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-[9px] font-black text-[#5c3c24] uppercase tracking-wider pl-1">Cubagem (M³):</label>
+                                      <input 
+                                        type="text"
+                                        value={editingM3}
+                                        onChange={(e) => setEditingM3(e.target.value)}
+                                        className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex gap-2.5 pt-1">
+                                    <button 
+                                      type="button"
+                                      onClick={() => handleSaveEditCubagem(item.id)}
+                                      className="flex-1 py-2.5 bg-gradient-to-b from-[#10b981] to-[#047857] hover:from-[#10b981] text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md cursor-pointer border border-[#10b981]/20 active:translate-y-0.5"
+                                    >
+                                      <Save size={14} />
+                                      Salvar
+                                    </button>
+                                    <button 
+                                      type="button"
+                                      onClick={handleCancelEditCubagem}
+                                      className="flex-1 py-2.5 bg-gradient-to-b from-[#5c3c24] to-[#3a2517] text-white rounded-xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-1.5 shadow-md cursor-pointer border border-white/10 active:translate-y-0.5"
+                                    >
+                                      <X size={14} />
+                                      Cancelar
+                                    </button>
+                                  </div>
+                                </div>
                               ) : (
                                 <>
-                                  <td className="px-5 py-3">
-                                    <LicensePlate plate={item.cavalo} type="cavalo" />
-                                  </td>
-                                  <td className="px-5 py-3">
-                                    <LicensePlate plate={item.carreta} type="carreta" />
-                                  </td>
-                                  <td className="px-5 py-3">
-                                    <div className="inline-flex items-center px-3.5 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-bold font-mono text-xs sm:text-sm shadow-inner">
+                                  {/* Delete & Edit Buttons Top Right */}
+                                  {!isReadOnly && (
+                                    <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+                                      <button 
+                                        type="button"
+                                        onClick={() => {
+                                          setEditingCubagemId(item.id);
+                                          setEditingCavalo(item.cavalo);
+                                          setEditingCarreta(item.carreta);
+                                          setEditingM3(item.m3);
+                                        }}
+                                        className="p-2 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                                        title="Editar Registro"
+                                      >
+                                        <Edit size={12} className="stroke-[2.5]" />
+                                      </button>
+                                      <button 
+                                        type="button"
+                                        onClick={() => handleDeleteCubagem(item.id)}
+                                        className="p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                                        title="Excluir Registro"
+                                      >
+                                        <Trash2 size={12} className="stroke-[2.5]" />
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* Plate indicators & layout */}
+                                  <div className="flex flex-col gap-2.5 pr-20">
+                                    <div className="flex items-start gap-2 flex-wrap">
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Cavalo</span>
+                                        <LicensePlate plate={item.cavalo} type="cavalo" />
+                                      </div>
+                                      <div className="flex flex-col gap-0.5">
+                                        <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Carreta</span>
+                                        <LicensePlate plate={item.carreta} type="carreta" />
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Volume showcase & registered time info */}
+                                  <div className="flex items-center justify-between gap-4 pt-2.5 border-t border-[#5c3c24]/10">
+                                    <div className="flex items-center gap-1 text-[9px] text-[#5c3c24]/80 font-mono font-bold">
+                                      <Clock size={11} className="text-[#ca1a20]" />
+                                      <span>
+                                        {new Date(item.inseridoEm).toLocaleString('pt-BR', {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                          hour: '2-digit',
+                                          minute: '2-digit'
+                                        })}
+                                      </span>
+                                    </div>
+
+                                    <div className="inline-flex items-center px-3.5 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-black font-mono text-xs shadow-inner shrink-0">
                                       {item.m3} M³
                                     </div>
-                                  </td>
-                                  <td className="px-5 py-3 hidden md:table-cell text-[10px] font-bold text-[#5c3c24]/80">
-                                    {new Date(item.inseridoEm).toLocaleString('pt-BR', {
-                                      day: '2-digit',
-                                      month: '2-digit',
-                                      year: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit'
-                                    })}
-                                  </td>
-                                  {!isReadOnly && (
-                                    <td className="px-5 py-3 text-center">
-                                      <div className="flex items-center justify-center gap-2">
-                                        <button 
-                                          type="button"
-                                          onClick={() => {
-                                            setEditingCubagemId(item.id);
-                                            setEditingCavalo(item.cavalo);
-                                            setEditingCarreta(item.carreta);
-                                            setEditingM3(item.m3);
-                                          }}
-                                          className="w-8 h-8 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
-                                          title="Editar Registro"
-                                        >
-                                          <Edit size={13} />
-                                        </button>
-                                        <button 
-                                          type="button"
-                                          onClick={() => handleDeleteCubagem(item.id)}
-                                          className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
-                                          title="Excluir Registro"
-                                        >
-                                          <Trash2 size={13} />
-                                        </button>
-                                      </div>
-                                    </td>
-                                  )}
+                                  </div>
                                 </>
                               )}
-                            </tr>
+                            </div>
                           );
                         })}
-                      </tbody>
-                    </table>
+                      </div>
+                    </>
                   );
                 })()}
               </div>
             </WoodenPlaque>
           </div>
         </div>
+      </>
       )}
 
       {/* ================= PORTABLE FOOTER METAL PLATE BAR ================= */}
