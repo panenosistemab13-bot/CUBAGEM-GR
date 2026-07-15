@@ -41,7 +41,7 @@ import { useCurrentPrinciple, PRINCIPLES_OF_LEADERSHIP } from './utils/principle
 import { toAbsoluteUrl } from './utils/url';
 import coffeeBg from './assets/images/coffee_rustic_bg_1780760486326.png';
 import coffeeShopBg from './assets/images/coffee_shop_bg_1780921585218.png';
-import tresCoracoesCubagem from './assets/images/tres_coracoes_cubagem_v2_1784145464792.jpg';
+import tresCoracoesCubagem from './assets/images/tres_coracoes_cubagem_v3_1784146040286.jpg';
 
 type Tab = 'menu' | 'rotas' | 'cubagem';
 
