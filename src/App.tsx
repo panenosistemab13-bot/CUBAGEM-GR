@@ -303,7 +303,8 @@ export default function App() {
             <div className="flex-1 hidden lg:flex justify-center pointer-events-auto" />
 
             <div className="flex items-center justify-end gap-8 w-1/4 pointer-events-auto">
-               {/* Dynamic Breadcrumb */}
+               {/* Dynamic Breadcrumb (Hidden by request) */}
+               {/*
                <AnimatePresence>
                  <motion.div 
                    initial={{ opacity: 0, x: 20 }}
@@ -323,6 +324,7 @@ export default function App() {
                     </motion.span>
                  </motion.div>
                </AnimatePresence>
+               */}
 
                {/* Clock Box */}
                <div className="hidden sm:flex items-center gap-3 px-5 py-2.5 bg-[#E8D4B0] border-2 border-[#3A2414] rounded-full text-[10px] leading-[14px] font-mono text-[#2D1A10] shadow-md">

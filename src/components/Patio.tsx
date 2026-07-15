@@ -1663,8 +1663,9 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         
         {/* Left title and logo stack */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-5 text-left w-full md:w-auto">
+          {/* Logo and title (Hidden by request) */}
+          {/*
           <div className="flex items-center gap-5">
-            {/* Logo stamp SVG */}
             <div className="relative w-16 h-16 sm:w-20 sm:h-20 shrink-0 pointer-events-none hover:scale-105 transition-transform duration-500">
               <svg className="w-full h-full filter drop-shadow-[0_4px_8px_rgba(58,36,20,0.35)]" viewBox="0 0 120 120">
                 <defs>
@@ -1678,20 +1679,16 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     <stop offset="100%" stopColor="#7a0307" />
                   </linearGradient>
                 </defs>
-                {/* Embossed metal rim */}
                 <circle cx="60" cy="60" r="54" fill="none" stroke="url(#goldGrad)" strokeWidth="4" />
                 <circle cx="60" cy="60" r="50" fill="url(#redGrad)" />
                 <circle cx="60" cy="60" r="44" fill="none" stroke="url(#goldGrad)" strokeWidth="1" strokeDasharray="3,3" opacity="0.4" />
                 
-                {/* Outer heart bundle */}
                 <g transform="translate(60, 56) scale(0.72)">
                   <path d="M-12,-10 C-17,-15 -25,-12 -25,-4 C-25,4 -15,10 0,22 C15,10 25,4 25,-4 C25,-12 17,-15 12,-10 C8,-6 2,-6 0,-6 C-2,-6 -8,-6 -12,-10 Z" fill="url(#goldGrad)" />
-                  {/* Embedded hearts inside */}
                   <path d="M-6,-4 C-8.5,-6.5 -12.5,-5 -12.5,-1 C-12.5,3 -7.5,6 0,12 C7.5,6 12.5,3 12.5,-1 C12.5,-5 8.5,-6.5 6,-4 C4,-2 1,-2 0,-2 C-1,-2 -3,-2 -6,-4 Z" fill="#7a0307" />
                   <path d="M-3,-1.5 C-4.2,-2.7 -6.2,-2 -6.2,0 C-6.2,2 -3.7,3.5 0,6 C3.7,3.5 6.2,2 6.2,0 C6.2,-2 4.2,-2.7 3,-1.5 C2,-0.5 0.5,-0.5 0,-0.5 C-0.5,-0.5 -1,-0.5 -3,-1.5 Z" fill="url(#goldGrad)" />
                 </g>
 
-                {/* Gold text border on top */}
                 <path id="brandPath" d="M 18,60 A 42,42 0 0,0 102,60" fill="none" />
                 <text fontFamily="Oswald" fontSize="9" fontWeight="bold" fill="url(#goldGrad)" textAnchor="middle">
                   <textPath href="#brandPath" startOffset="50%">3 CORAÇÕES</textPath>
@@ -1699,7 +1696,6 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
               </svg>
             </div>
 
-            {/* Page title next to the logo */}
             <div className="flex flex-col">
               <h1 className="text-3xl font-rustic-title font-black text-[#2b180d] uppercase tracking-wide leading-none drop-shadow-[1px_2px_1px_rgba(255,255,255,0.45)]">
                 CUBAGEM
@@ -1712,6 +1708,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
               </div>
             </div>
           </div>
+          */}
         </div>
 
         {/* Action Button for returning / Back */}
