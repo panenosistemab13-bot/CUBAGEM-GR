@@ -44,6 +44,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         backgroundImage: `url(${toAbsoluteUrl(bgImage)})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        backgroundAttachment: 'fixed'
       }}
     >
       {/* Decorative Warm Light Radial Glow */}

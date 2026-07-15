@@ -41,14 +41,13 @@ import { useCurrentPrinciple, PRINCIPLES_OF_LEADERSHIP } from './utils/principle
 import { toAbsoluteUrl } from './utils/url';
 import coffeeBg from './assets/images/coffee_rustic_bg_1780760486326.png';
 import coffeeShopBg from './assets/images/coffee_shop_bg_1780921585218.png';
-import tresCoracoesCubagem from './assets/images/tres_coracoes_cubagem_v4_1784146392955.jpg';
 
 type Tab = 'menu' | 'rotas' | 'cubagem';
 
 const backgroundImages: Record<Tab, string> = {
   menu: '', // Empty for pure dark background
   rotas: toAbsoluteUrl(coffeeBg), // Premium rustic coffee setup
-  cubagem: toAbsoluteUrl(tresCoracoesCubagem), // High-definition tres coracoes coffee cup
+  cubagem: '', // Replaced with inline background in Patio.tsx
 };
 
 const tabs = [
