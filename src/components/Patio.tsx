@@ -26,8 +26,6 @@ import {
 } from 'lucide-react';
 import { ref, push, set, onValue, remove, update } from 'firebase/database';
 import { rtdb as db, handleFirestoreError, OperationType } from '../firebase';
-import { toAbsoluteUrl } from '../utils/url';
-import papelDeParedeCubagem from '../assets/images/tres_coracoes_cubagem_v4_1784146392955.jpg';
 
 interface PatioProps {
   onBack?: () => void;
@@ -1658,19 +1656,9 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   });
 
   return (
-    <>
-      <style>{`
-        .force-bg-patio {
-          background-image: url("${toAbsoluteUrl(papelDeParedeCubagem)}") !important;
-          background-size: cover !important;
-          background-position: center !important;
-          background-repeat: no-repeat !important;
-          background-attachment: fixed !important;
-        }
-      `}</style>
-      <div 
-        className="w-full min-h-full text-[#2b180d] relative flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-x-hidden select-none force-bg-patio"
-      >
+    <div 
+      className="w-full min-h-full text-[#2b180d] relative flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-x-hidden select-none force-bg-patio"
+    >
       
        {/* ================= HEADER AREA ================= */}
       <div className="w-full flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 max-w-[94rem] mx-auto mt-2 mb-6 shrink-0">
@@ -3349,6 +3337,5 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       </div>
 
     </div>
-    </>
   );
 }
