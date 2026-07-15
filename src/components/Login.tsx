@@ -38,16 +38,19 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#2D1A10]"
-      style={{
-        backgroundImage: `url(${toAbsoluteUrl(bgImage)})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed'
-      }}
-    >
+    <>
+      <style>{`
+        .force-bg-login {
+          background-image: url("${toAbsoluteUrl(bgImage)}") !important;
+          background-size: cover !important;
+          background-position: center !important;
+          background-repeat: no-repeat !important;
+          background-attachment: fixed !important;
+        }
+      `}</style>
+      <div 
+        className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#2D1A10] force-bg-login"
+      >
       {/* Decorative Warm Light Radial Glow */}
       <div 
         className="absolute inset-0 pointer-events-none opacity-40 bg-black/30" 
@@ -193,5 +196,6 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         </div>
       </motion.div>
     </div>
+    </>
   );
 }
