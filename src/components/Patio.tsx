@@ -28,6 +28,7 @@ import { rtdb as db, handleFirestoreError, OperationType } from '../firebase';
 
 interface PatioProps {
   onBack?: () => void;
+  isReadOnly?: boolean;
 }
 
 // Slotted Vintage Flat-head Screw Component for authentic industrial look
@@ -337,7 +338,7 @@ const getAutoGreeting = (): 'bom dia' | 'boa tarde' | 'boa noite' => {
   }
 };
 
-export default function Patio({ onBack }: PatioProps) {
+export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   const principle = useCurrentPrinciple();
   const [patioData, setPatioData] = useState<PatioItem[]>([]);
   const [pasteText, setPasteText] = useState('');
@@ -669,6 +670,7 @@ export default function Patio({ onBack }: PatioProps) {
 
   const handleAddCubagemManual = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     if (!manualCavalo.trim() || !manualCarreta.trim() || !manualM3.trim()) {
       setCubagemStatusMsg({ type: 'error', text: 'Preencha todos os campos.' });
       setTimeout(() => setCubagemStatusMsg(null), 3000);
@@ -708,6 +710,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleSaveEditCubagem = async (id: string) => {
+    if (isReadOnly) return;
     if (!editingCavalo.trim() || !editingCarreta.trim() || !editingM3.trim()) {
       setCubagemStatusMsg({ type: 'error', text: 'Preencha todos os campos para salvar.' });
       setTimeout(() => setCubagemStatusMsg(null), 3000);
@@ -749,6 +752,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleDeleteCubagem = async (id: string) => {
+    if (isReadOnly) return;
     try {
       await remove(ref(db, `patio/cubagem/${id}`));
     } catch (error) {
@@ -757,6 +761,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleClearAllCubagem = async () => {
+    if (isReadOnly) return;
     if (window.confirm("Tem certeza que deseja apagar TODAS as informações salvas na aba de cubagem? Esta ação não pode ser desfeita.")) {
       try {
         await remove(ref(db, 'patio/cubagem'));
@@ -1037,6 +1042,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleConfirmImport = async () => {
+    if (isReadOnly) return;
     const cubagemRef = ref(db, 'patio/cubagem');
     let addedCount = 0;
     const newlyAddedIds: string[] = [];
@@ -1086,6 +1092,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleUndoLastImport = async () => {
+    if (isReadOnly) return;
     if (lastImportedIds.length === 0) return;
     if (window.confirm(`Deseja realmente desmarcar/remover as últimas ${lastImportedIds.length} cubagens importadas recentemente?`)) {
       let undoneCount = 0;
@@ -1123,10 +1130,12 @@ export default function Patio({ onBack }: PatioProps) {
   }, []);
 
   const handleAssinadoChange = async (id: string, value: string) => {
+    if (isReadOnly) return;
     await updatePatioData(id, 'assinado', value);
   };
 
   const updatePatioData = async (id: string, field: keyof PatioItem, value: string) => {
+    if (isReadOnly) return;
     setPatioData(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
     try {
       await update(ref(db, `patio/veiculos/${id}`), { [field]: value });
@@ -1136,6 +1145,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleDeleteItem = async (id: string) => {
+    if (isReadOnly) return;
     try {
       await remove(ref(db, `patio/veiculos/${id}`));
     } catch (error) {
@@ -1144,6 +1154,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleClearAll = async () => {
+    if (isReadOnly) return;
     try {
       await remove(ref(db, 'patio/veiculos'));
       setPasteText('');
@@ -1188,6 +1199,7 @@ export default function Patio({ onBack }: PatioProps) {
   };
 
   const handleProcessData = async () => {
+    if (isReadOnly) return;
     if (!pasteText.trim() && !imageFile) {
       setStatusMsg({ type: 'error', text: 'Cole os dados do Excel ou carregue um arquivo/imagem.' });
       return;
@@ -1793,10 +1805,11 @@ export default function Patio({ onBack }: PatioProps) {
                 {/* Embedded Terminal Board */}
                 <div className="relative bg-gradient-to-br from-[#1d120a] to-[#2b190f] border-3 border-[#5c3c24]/85 p-1.5 rounded-xl shadow-[inset_0_4px_10px_rgba(0,0,0,0.85),0_1px_2px_rgba(255,255,255,0.15)] overflow-hidden">
                   <textarea 
-                    className="w-full h-48 bg-transparent p-4 text-[12px] text-[#edd9bf] font-mono resize-none focus:outline-none placeholder:text-[#5c3c24]/50 uppercase leading-relaxed font-semibold"
-                    placeholder="AGUARDANDO ENTRADA DE DADOS ..."
+                    className="w-full h-48 bg-transparent p-4 text-[12px] text-[#edd9bf] font-mono resize-none focus:outline-none placeholder:text-[#5c3c24]/50 uppercase leading-relaxed font-semibold disabled:opacity-50"
+                    placeholder={isReadOnly ? "MODO SOMENTE LEITURA - PCP" : "AGUARDANDO ENTRADA DE DADOS ..."}
                     value={pasteText}
                     onChange={(e) => setPasteText(e.target.value)}
+                    disabled={isReadOnly}
                   />
                   
                   {/* Glowing Indicator lamp */}
@@ -1847,60 +1860,66 @@ export default function Patio({ onBack }: PatioProps) {
               </div>
 
               {/* Action Buttons styled like the wooden theme buttons */}
-              <div className="flex flex-col gap-3.5 pt-4">
-                
-                {/* Advanced Hidden File OCR option */}
-                <div className="flex items-center gap-2">
-                  <label className="flex-1 filter hover:brightness-110 transition-all">
-                    <div className="flex items-center justify-center gap-2 py-2 px-4 border-2 border-dashed border-[#5c3c24]/40 hover:border-[#5c3c24]/80 rounded-xl bg-[#eddaba]/40 text-[#5c3c24] text-[10px] font-bold uppercase tracking-widest cursor-pointer">
-                      <ImageIcon size={14} className="stroke-[2.5]" />
-                      <span>{imageFile ? imageFile.name.substring(0, 18) + '...' : 'Anexar Imagem OCR'}</span>
-                    </div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      className="hidden" 
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files[0]) {
-                          setImageFile(e.target.files[0]);
-                          setStatusMsg({ type: 'success', text: `Imagem '${e.target.files[0].name}' selecionada. Clique em Executar.` });
-                        }
-                      }} 
-                    />
-                  </label>
-                  {imageFile && (
-                    <button 
-                      onClick={() => { setImageFile(null); setStatusMsg(null); }}
-                      className="p-2 border-2 border-red-800/20 text-red-700 bg-red-150-10 hover:bg-red-500 hover:text-white rounded-xl text-xs font-bold transition-all"
-                    >
-                      X
-                    </button>
-                  )}
+              {isReadOnly ? (
+                <div className="p-4 bg-[#ca1a20]/10 border-2 border-[#ca1a20]/40 rounded-xl text-center text-[#ca1a20] font-black text-[10px] uppercase tracking-wider">
+                  ⚠️ Modo Somente Leitura (PCP)
                 </div>
+              ) : (
+                <div className="flex flex-col gap-3.5 pt-4">
+                  
+                  {/* Advanced Hidden File OCR option */}
+                  <div className="flex items-center gap-2">
+                    <label className="flex-1 filter hover:brightness-110 transition-all">
+                      <div className="flex items-center justify-center gap-2 py-2 px-4 border-2 border-dashed border-[#5c3c24]/40 hover:border-[#5c3c24]/80 rounded-xl bg-[#eddaba]/40 text-[#5c3c24] text-[10px] font-bold uppercase tracking-widest cursor-pointer">
+                        <ImageIcon size={14} className="stroke-[2.5]" />
+                        <span>{imageFile ? imageFile.name.substring(0, 18) + '...' : 'Anexar Imagem OCR'}</span>
+                      </div>
+                      <input 
+                        type="file" 
+                        accept="image/*" 
+                        className="hidden" 
+                        onChange={(e) => {
+                          if (e.target.files && e.target.files[0]) {
+                            setImageFile(e.target.files[0]);
+                            setStatusMsg({ type: 'success', text: `Imagem '${e.target.files[0].name}' selecionada. Clique em Executar.` });
+                          }
+                        }} 
+                      />
+                    </label>
+                    {imageFile && (
+                      <button 
+                        onClick={() => { setImageFile(null); setStatusMsg(null); }}
+                        className="p-2 border-2 border-red-800/20 text-red-700 bg-red-150-10 hover:bg-red-500 hover:text-white rounded-xl text-xs font-bold transition-all"
+                      >
+                        X
+                      </button>
+                    )}
+                  </div>
 
-                <motion.button 
-                  whileHover={{ scale: 1.01 }}
-                  whileTap={{ scale: 0.99 }}
-                  onClick={handleProcessData}
-                  disabled={isProcessing}
-                  className={cn(
-                    "w-full py-4 font-black text-[11px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2 rounded-xl cursor-pointer shadow-[0_5px_0px_#800609,0_6px_10px_rgba(0,0,0,0.5)] active:translate-y-0.5 active:shadow-[0_2px_0px_#800609,0_3px_5px_rgba(0,0,0,0.4)] border-2 border-[#ff3e47]/30 text-white",
-                    isProcessing 
-                      ? "bg-slate-800 text-slate-500 shadow-none border-transparent cursor-not-allowed" 
-                      : "bg-gradient-to-b from-[#ca1a20] to-[#8c060a] hover:from-[#e52229] hover:to-[#a9080d]"
-                  )}
-                >
-                  {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} className="stroke-[3]" />}
-                  Executar Lote
-                </motion.button>
-                
-                <button 
-                  onClick={handleClearAll}
-                  className="w-full py-2.5 text-[#5c3c24] hover:text-[#8c060a] hover:border-[#8c060a]/30 font-black text-[10px] uppercase tracking-[0.25em] border-2 border-[#5c3c24]/20 rounded-xl bg-[#f0e3d2]/60 hover:bg-[#ebd9c3] transition-all cursor-pointer shadow-sm"
-                >
-                  Resetar Registros
-                </button>
-              </div>
+                  <motion.button 
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={handleProcessData}
+                    disabled={isProcessing}
+                    className={cn(
+                      "w-full py-4 font-black text-[11px] uppercase tracking-[0.3em] transition-all flex items-center justify-center gap-2 rounded-xl cursor-pointer shadow-[0_5px_0px_#800609,0_6px_10px_rgba(0,0,0,0.5)] active:translate-y-0.5 active:shadow-[0_2px_0px_#800609,0_3px_5px_rgba(0,0,0,0.4)] border-2 border-[#ff3e47]/30 text-white",
+                      isProcessing 
+                        ? "bg-slate-800 text-slate-500 shadow-none border-transparent cursor-not-allowed" 
+                        : "bg-gradient-to-b from-[#ca1a20] to-[#8c060a] hover:from-[#e52229] hover:to-[#a9080d]"
+                    )}
+                  >
+                    {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} className="stroke-[3]" />}
+                    Executar Lote
+                  </motion.button>
+                  
+                  <button 
+                    onClick={handleClearAll}
+                    className="w-full py-2.5 text-[#5c3c24] hover:text-[#8c060a] hover:border-[#8c060a]/30 font-black text-[10px] uppercase tracking-[0.25em] border-2 border-[#5c3c24]/20 rounded-xl bg-[#f0e3d2]/60 hover:bg-[#ebd9c3] transition-all cursor-pointer shadow-sm"
+                  >
+                    Resetar Registros
+                  </button>
+                </div>
+              )}
 
             </div>
           </WoodenPlaque>
@@ -1953,13 +1972,13 @@ export default function Patio({ onBack }: PatioProps) {
                     <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em]">Identificador</th>
                     <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em]">Está no Pátio?</th>
                     <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em]">Assinou?</th>
-                    <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em] text-center">--</th>
+                    {!isReadOnly && <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em] text-center">--</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#5c3c24]/10">
                   {filteredData.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="py-24 text-center">
+                      <td colSpan={isReadOnly ? 3 : 4} className="py-24 text-center">
                         <span className="text-[#5c3c24]/40 font-black uppercase tracking-[0.4em] text-[11px] animate-pulse">Aguardando Sincronização de Fluxo</span>
                       </td>
                     </tr>
@@ -1978,16 +1997,20 @@ export default function Patio({ onBack }: PatioProps) {
                             <select 
                               value={item.estaNoPatio} 
                               onChange={(e) => updatePatioData(item.id, 'estaNoPatio', e.target.value as 'Sim' | 'Não')} 
+                              disabled={isReadOnly}
                               className={cn(
-                                "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/60 text-[#fdefd1] font-black text-xs uppercase tracking-widest rounded-xl py-2 px-4 shadow-md outline-none cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all appearance-none text-center"
+                                "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/60 text-[#fdefd1] font-black text-xs uppercase tracking-widest rounded-xl py-2 px-4 shadow-md outline-none appearance-none text-center",
+                                isReadOnly ? "opacity-75 cursor-not-allowed" : "cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all"
                               )}
                             >
                               <option value="Sim" className="bg-[#5c3c24] text-[#fdefd1] font-bold">SIM</option>
                               <option value="Não" className="bg-[#5c3c24] text-[#fdefd1] font-bold">NÃO</option>
                             </select>
-                            <div className="absolute top-1/2 right-3 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[9px] font-bold">
-                              ▼
-                            </div>
+                            {!isReadOnly && (
+                              <div className="absolute top-1/2 right-3 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[9px] font-bold">
+                                ▼
+                              </div>
+                            )}
                           </div>
                         </td>
 
@@ -1997,29 +2020,35 @@ export default function Patio({ onBack }: PatioProps) {
                             <select 
                               value={item.assinado} 
                               onChange={(e) => handleAssinadoChange(item.id, e.target.value)} 
+                              disabled={isReadOnly}
                               className={cn(
-                                "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/60 text-[#fdefd1] font-black text-xs uppercase tracking-widest rounded-xl py-2 px-4 shadow-md outline-none cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all appearance-none text-center"
+                                "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/60 text-[#fdefd1] font-black text-xs uppercase tracking-widest rounded-xl py-2 px-4 shadow-md outline-none appearance-none text-center",
+                                isReadOnly ? "opacity-75 cursor-not-allowed" : "cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all"
                               )}
                             >
                               <option value="Sim" className="bg-[#5c3c24] text-[#fdefd1] font-bold">SIM</option>
                               <option value="Não" className="bg-[#5c3c24] text-[#fdefd1] font-bold">NÃO</option>
                             </select>
-                            <div className="absolute top-1/2 right-3 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[9px] font-bold">
-                              ▼
-                            </div>
+                            {!isReadOnly && (
+                              <div className="absolute top-1/2 right-3 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[9px] font-bold">
+                                ▼
+                              </div>
+                            )}
                           </div>
                         </td>
 
                         {/* Action Delete */}
-                        <td className="py-3.5 px-4 text-center">
-                          <button 
-                            onClick={() => handleDeleteItem(item.id)}
-                            className="p-2.5 bg-[#fdedeb] hover:bg-red-200 border-2 border-red-800/10 hover:border-red-800/30 text-red-700 hover:text-red-900 rounded-xl transition-all cursor-pointer shadow-sm active:translate-y-0.5"
-                            title="Deletar Registro"
-                          >
-                            <Trash2 size={15} className="stroke-[2.5]" />
-                          </button>
-                        </td>
+                        {!isReadOnly && (
+                          <td className="py-3.5 px-4 text-center">
+                            <button 
+                              onClick={() => handleDeleteItem(item.id)}
+                              className="p-2.5 bg-[#fdedeb] hover:bg-red-200 border-2 border-red-800/10 hover:border-red-800/30 text-red-700 hover:text-red-900 rounded-xl transition-all cursor-pointer shadow-sm active:translate-y-0.5"
+                              title="Deletar Registro"
+                            >
+                              <Trash2 size={15} className="stroke-[2.5]" />
+                            </button>
+                          </td>
+                        )}
 
                       </tr>
                     ))
@@ -2041,13 +2070,15 @@ export default function Patio({ onBack }: PatioProps) {
                     className="bg-[#fcf9f2] border-2 border-[#5c3c24]/30 rounded-2xl p-4 shadow-md flex flex-col gap-4 relative hover:border-[#8c060a]/40 transition-colors text-left font-sans"
                   >
                     {/* Delete action button */}
-                    <button 
-                      onClick={() => handleDeleteItem(item.id)}
-                      className="absolute top-3.5 right-3.5 p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
-                      title="Deletar Registro"
-                    >
-                      <Trash2 size={13} className="stroke-[2.5]" />
-                    </button>
+                    {!isReadOnly && (
+                      <button 
+                        onClick={() => handleDeleteItem(item.id)}
+                        className="absolute top-3.5 right-3.5 p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                        title="Deletar Registro"
+                      >
+                        <Trash2 size={13} className="stroke-[2.5]" />
+                      </button>
+                    )}
 
                     {/* Plates & identifiers details */}
                     <div className="flex items-start gap-3.5">
@@ -2079,16 +2110,20 @@ export default function Patio({ onBack }: PatioProps) {
                           <select 
                             value={item.estaNoPatio} 
                             onChange={(e) => updatePatioData(item.id, 'estaNoPatio', e.target.value as 'Sim' | 'Não')} 
+                            disabled={isReadOnly}
                             className={cn(
-                              "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/50 text-[#fdefd1] font-black text-[10.5px] uppercase tracking-widest rounded-xl py-2 pl-3 pr-7 shadow-sm outline-none cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all appearance-none text-center"
+                              "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/50 text-[#fdefd1] font-black text-[10.5px] uppercase tracking-widest rounded-xl py-2 pl-3 pr-7 shadow-sm outline-none appearance-none text-center",
+                              isReadOnly ? "opacity-75 cursor-not-allowed" : "cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all"
                             )}
                           >
                             <option value="Sim" className="bg-[#5c3c24] text-[#fdefd1]">SIM</option>
                             <option value="Não" className="bg-[#5c3c24] text-[#fdefd1]">NÃO</option>
                           </select>
-                          <div className="absolute top-1/2 right-2.5 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[7.5px]">
-                            ▼
-                          </div>
+                          {!isReadOnly && (
+                            <div className="absolute top-1/2 right-2.5 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[7.5px]">
+                              ▼
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -2099,16 +2134,20 @@ export default function Patio({ onBack }: PatioProps) {
                           <select 
                             value={item.assinado} 
                             onChange={(e) => handleAssinadoChange(item.id, e.target.value)} 
+                            disabled={isReadOnly}
                             className={cn(
-                              "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/50 text-[#fdefd1] font-black text-[10.5px] uppercase tracking-widest rounded-xl py-2 pl-3 pr-7 shadow-sm outline-none cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all appearance-none text-center"
+                              "w-full bg-gradient-to-b from-[#a27a5d] to-[#835835] border-2 border-[#5c3c24]/50 text-[#fdefd1] font-black text-[10.5px] uppercase tracking-widest rounded-xl py-2 pl-3 pr-7 shadow-sm outline-none appearance-none text-center",
+                              isReadOnly ? "opacity-75 cursor-not-allowed" : "cursor-pointer hover:from-[#bfa186] hover:to-[#926b4c] transition-all"
                             )}
                           >
                             <option value="Sim" className="bg-[#5c3c24] text-[#fdefd1]">SIM</option>
                             <option value="Não" className="bg-[#5c3c24] text-[#fdefd1]">NÃO</option>
                           </select>
-                          <div className="absolute top-1/2 right-2.5 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[7.5px]">
-                            ▼
-                          </div>
+                          {!isReadOnly && (
+                            <div className="absolute top-1/2 right-2.5 -translate-y-1/2 pointer-events-none text-[#fdefd1] text-[7.5px]">
+                              ▼
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -2612,39 +2651,22 @@ export default function Patio({ onBack }: PatioProps) {
                 )}
 
                 {/* SPREADSHEET PASTE & PREVIEW TOGGLE BLOCK */}
-                {!isShowingPreview ? (
-                  <>
-                    {/* PDF IMPORT BOX */}
-                    <div className="border border-dashed border-[#5c3c24]/40 hover:border-[#ca1a20] transition-all rounded-2xl p-5 bg-[#f0dfcc]/30 hover:bg-[#f0dfcc]/60 flex flex-col items-center justify-center text-center relative group min-h-[9rem] shadow-inner">
-                      {isProcessingCubagem ? (
-                        <div className="flex flex-col items-center justify-center space-y-3">
-                          <Loader2 className="animate-spin text-[#ca1a20] stroke-[2.5]" size={32} />
-                          <span className="text-xs font-black uppercase tracking-wider text-[#311f14]">Analisando PDF...</span>
-                          <span className="text-[10px] text-[#5c3c24]/80 font-semibold max-w-xs leading-relaxed">Extraindo dados estruturados do manifesto</span>
-                        </div>
-                      ) : (
-                        <label className="cursor-pointer flex flex-col items-center w-full h-full justify-center space-y-3 py-2">
-                          <div className="w-11 h-11 bg-[#e4cbab] group-hover:bg-[#ca1a20]/10 text-[#5c3c24] group-hover:text-[#ca1a20] rounded-2xl flex items-center justify-center transition-colors shadow-sm">
-                            <UploadCloud size={20} className="stroke-[2.5]" />
-                          </div>
-                          <div className="flex flex-col space-y-0.5">
-                            <span className="text-xs font-black uppercase tracking-wider text-[#311f14]">Importar Cubagem via PDF</span>
-                            <span className="text-[9px] text-[#5c3c24]/80 font-bold">Arraste ou clique para selecionar</span>
-                          </div>
-                          <input 
-                            type="file" 
-                            accept="application/pdf" 
-                            className="hidden" 
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                handleProcessCubagemPdf(file);
-                              }
-                            }}
-                          />
-                        </label>
-                      )}
+                {isReadOnly ? (
+                  <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/30 rounded-2xl p-5 space-y-4 text-left shadow-lg relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-1.5 h-full bg-[#ca1a20]" />
+                    <div className="text-xs font-black uppercase tracking-wider text-[#311f14] border-b border-[#5c3c24]/20 pb-2 flex items-center gap-1.5">
+                      <span>Acesso Restrito</span>
                     </div>
+                    <div className="p-4 bg-[#ca1a20]/10 border-2 border-[#ca1a20]/40 rounded-xl text-center text-[#ca1a20] font-black text-[10px] uppercase tracking-wider">
+                      ⚠️ Modo Somente Leitura (PCP)
+                    </div>
+                    <p className="text-[10px] text-[#5c3c24] font-medium leading-relaxed uppercase">
+                      Como usuário PCP, você tem permissão para visualizar todos os registros de cubagem em tempo real, mas modificações, importações e exclusões são exclusivas do Grupo GR.
+                    </p>
+                  </div>
+                ) : !isShowingPreview ? (
+                  <>
+                    {/* PDF IMPORT BOX REMOVED */}
 
                     {/* MANUAL ADDITION SECTION */}
                     <form onSubmit={handleAddCubagemManual} className="bg-[#faf6f0] border-2 border-[#5c3c24]/30 rounded-2xl p-5 space-y-4 text-left shadow-lg relative overflow-hidden">
@@ -2877,7 +2899,7 @@ export default function Patio({ onBack }: PatioProps) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-                  {cubagemData.length > 0 && (
+                  {cubagemData.length > 0 && !isReadOnly && (
                     <button
                       type="button"
                       onClick={handleClearAllCubagem}
@@ -2983,7 +3005,7 @@ export default function Patio({ onBack }: PatioProps) {
                           <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Carreta (Placa)</th>
                           <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Cubagem (M³)</th>
                           <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider hidden md:table-cell">Registrado Em</th>
-                          <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>
+                          {!isReadOnly && <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[#5c3c24]/10 bg-[#fcfaf7]/40">
@@ -3063,31 +3085,33 @@ export default function Patio({ onBack }: PatioProps) {
                                       minute: '2-digit'
                                     })}
                                   </td>
-                                  <td className="px-5 py-3 text-center">
-                                    <div className="flex items-center justify-center gap-2">
-                                      <button 
-                                        type="button"
-                                        onClick={() => {
-                                          setEditingCubagemId(item.id);
-                                          setEditingCavalo(item.cavalo);
-                                          setEditingCarreta(item.carreta);
-                                          setEditingM3(item.m3);
-                                        }}
-                                        className="w-8 h-8 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
-                                        title="Editar Registro"
-                                      >
-                                        <Edit size={13} />
-                                      </button>
-                                      <button 
-                                        type="button"
-                                        onClick={() => handleDeleteCubagem(item.id)}
-                                        className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
-                                        title="Excluir Registro"
-                                      >
-                                        <Trash2 size={13} />
-                                      </button>
-                                    </div>
-                                  </td>
+                                  {!isReadOnly && (
+                                    <td className="px-5 py-3 text-center">
+                                      <div className="flex items-center justify-center gap-2">
+                                        <button 
+                                          type="button"
+                                          onClick={() => {
+                                            setEditingCubagemId(item.id);
+                                            setEditingCavalo(item.cavalo);
+                                            setEditingCarreta(item.carreta);
+                                            setEditingM3(item.m3);
+                                          }}
+                                          className="w-8 h-8 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
+                                          title="Editar Registro"
+                                        >
+                                          <Edit size={13} />
+                                        </button>
+                                        <button 
+                                          type="button"
+                                          onClick={() => handleDeleteCubagem(item.id)}
+                                          className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
+                                          title="Excluir Registro"
+                                        >
+                                          <Trash2 size={13} />
+                                        </button>
+                                      </div>
+                                    </td>
+                                  )}
                                 </>
                               )}
                             </tr>

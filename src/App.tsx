@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import InitialMenu from './components/InitialMenu';
 import MobileMenu from './components/MobileMenu';
+import Login from './components/Login';
 import {
   Route,
   LayoutGrid,
@@ -20,7 +21,8 @@ import {
   BellRing,
   User,
   Briefcase,
-  Calendar
+  Calendar,
+  LogOut
 } from 'lucide-react';
 import { cn } from './lib/utils';
 import { rtdb as db } from './firebase';
@@ -50,9 +52,7 @@ const backgroundImages: Record<Tab, string> = {
 };
 
 const tabs = [
-  { id: 'menu', label: 'Início', icon: LayoutGrid },
   { id: 'cubagem', label: 'Cubagem', icon: Database },
-  { id: 'rotas', label: 'Rotas', icon: Route },
 ];
 
 function Screw({ className }: { className?: string }) {
@@ -70,7 +70,21 @@ function Screw({ className }: { className?: string }) {
 
 export default function App() {
   const principle = useCurrentPrinciple();
-  const [activeTab, setActiveTab] = useState<Tab>('menu');
+  const [currentUser, setCurrentUser] = useState<string | null>(() => {
+    return localStorage.getItem('pgr_logged_user');
+  });
+
+  const handleLoginSuccess = (username: string) => {
+    setCurrentUser(username);
+    localStorage.setItem('pgr_logged_user', username);
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('pgr_logged_user');
+  };
+
+  const [activeTab, setActiveTab] = useState<Tab>('cubagem');
   const [focusedCardIndex, setFocusedCardIndex] = useState<number>(0);
   const [averbacaoView, setAverbacaoView] = useState<'generator' | 'codes'>('generator');
   const [smCreatorView, setSmCreatorView] = useState<'generator' | 'codes'>('generator');
@@ -114,26 +128,11 @@ export default function App() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Global shortcuts (Ctrl + Number)
-      if (e.ctrlKey) {
-        switch (e.key) {
-          case '1': e.preventDefault(); setActiveTab('cubagem'); return;
-          case '2': e.preventDefault(); setActiveTab('rotas'); return;
-        }
-      }
-
       const isInputFocused = document.activeElement?.tagName === 'INPUT' || 
                              document.activeElement?.tagName === 'TEXTAREA' || 
                              document.activeElement?.getAttribute('contenteditable') === 'true';
 
       if (isInputFocused) return;
-
-      // Global Backspace to Return to Menu
-      if (e.key === 'Backspace' && activeTab !== 'menu') {
-        e.preventDefault();
-        setActiveTab('menu');
-        return;
-      }
 
       // Arrow Up/Down for smooth main page scrolling
       if (e.key === 'ArrowDown') {
@@ -149,30 +148,11 @@ export default function App() {
           scrollContainer.scrollBy({ top: -180, behavior: 'smooth' });
         }
       }
-
-      // Arrow Left/Right to transition to different page categories when not on the main menu carousel
-      if (activeTab !== 'menu') {
-        if (e.key === 'ArrowLeft') {
-          e.preventDefault();
-          const currentIdx = tabs.findIndex(t => t.id === activeTab);
-          if (currentIdx !== -1) {
-            const prevIdx = (currentIdx - 1 + tabs.length) % tabs.length;
-            setActiveTab(tabs[prevIdx].id as Tab);
-          }
-        } else if (e.key === 'ArrowRight') {
-          e.preventDefault();
-          const currentIdx = tabs.findIndex(t => t.id === activeTab);
-          if (currentIdx !== -1) {
-            const nextIdx = (currentIdx + 1) % tabs.length;
-            setActiveTab(tabs[nextIdx].id as Tab);
-          }
-        }
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab]);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -193,23 +173,9 @@ export default function App() {
   const activeTabInfo = tabs.find(t => t.id === activeTab);
 
   const renderContent = () => {
-    if (isMobile && activeTab === 'menu') {
-      return <MobileMenu onSelect={(id) => setActiveTab(id as Tab)} />;
-    }
-
     switch (activeTab) {
-      case 'menu':
-        return (
-          <InitialMenu 
-            onSelect={(id) => { setActiveTab(id as Tab); }} 
-            focusedIndex={focusedCardIndex}
-            setFocusedIndex={setFocusedCardIndex}
-          />
-        );
-      case 'rotas':
-        return <Rotas onBack={() => setActiveTab('menu')} />;
       case 'cubagem':
-        return <Patio onBack={() => setActiveTab('menu')} />;
+        return <Patio isReadOnly={currentUser === 'PCP'} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center p-20 text-zinc-500">
@@ -268,6 +234,10 @@ export default function App() {
   const maxUrgencyApp = activeTodayApps[0];
   const maxUrgencyScore = maxUrgencyApp ? maxUrgencyApp.urgencyScore : 0;
 
+  if (!currentUser) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
   return (
     <div className="min-h-screen md:h-screen flex bg-[#F2E4CC] text-[#2D1A10] md:overflow-hidden font-sans relative flex-col">
       
@@ -310,73 +280,27 @@ export default function App() {
         {/* Top Header (Only on active modules) */}
         {activeTab !== 'menu' && (
           <header className="h-20 shrink-0 flex items-center justify-between px-8 z-50 relative pointer-events-none">
-            <div className={cn("hidden md:flex items-center gap-6 w-1/4 pointer-events-auto", activeTab === 'averbacao' ? "opacity-0 invisible" : "")}>
-              <div className="flex items-center gap-4">
-                <div className="w-11 h-11 rounded-full overflow-hidden border-2 border-[#cead80] bg-[#800609] flex items-center justify-center shrink-0 shadow-lg shadow-black/30">
-                  <img src="/logo-pgr.png" alt="Logo" className="w-full h-full object-cover scale-105" />
+            <div className="flex items-center gap-3 w-auto md:w-1/4 pointer-events-auto">
+              <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 bg-[#E8D4B0] border-2 border-[#3A2414] rounded-full shadow-md">
+                <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#B32025] flex items-center justify-center text-white text-[9px] sm:text-[10px] font-black uppercase shrink-0">
+                  {currentUser ? currentUser[0] : 'U'}
                 </div>
-                <div className="flex flex-col">
-                  <span className="text-2xl font-black tracking-widest text-[#3A2414] leading-none font-serif">SISTEMA PGR</span>
-                  <span className="text-[10px] font-black text-[#B32025] uppercase tracking-[0.2em] mt-1.5 leading-none">
-                    SANTA LUZIA / MG
-                  </span>
-                </div>
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider text-[#3A2414] leading-none">
+                  {currentUser}
+                </span>
+                <div className="w-[1px] h-3 sm:h-4 bg-[#3A2414]/20 mx-0.5 sm:mx-1" />
+                <button
+                  onClick={handleLogout}
+                  className="p-1 hover:text-[#B32025] text-[#3A2414]/60 hover:scale-105 active:scale-95 transition-all flex items-center gap-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                  title="Sair"
+                >
+                  <LogOut size={13} className="stroke-[2.5]" />
+                </button>
               </div>
             </div>
 
-            {/* Centered Navigation */}
-            <div className="flex-1 hidden lg:flex justify-center pointer-events-auto">
-              <AnimatePresence>
-                <motion.nav 
-                  initial={{ y: -20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  exit={{ y: -20, opacity: 0 }}
-                  className="flex items-center gap-2 p-1.5 bg-[#3A2414] border-2 border-[#C7A26A]/50 rounded-2xl shadow-xl relative"
-                >
-                  {/* Miniature decorative brass rivets */}
-                  <div className="absolute -top-1 -left-1 w-2 h-2 rounded-full bg-gradient-to-br from-[#dfc1a0] to-[#3a200a] shadow-md border border-[#C7A26A]/40" />
-                  <div className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-gradient-to-br from-[#dfc1a0] to-[#3a200a] shadow-md border border-[#C7A26A]/40" />
-                  <div className="absolute -bottom-1 -left-1 w-2 h-2 rounded-full bg-gradient-to-br from-[#dfc1a0] to-[#3a200a] shadow-md border border-[#C7A26A]/40" />
-                  <div className="absolute -bottom-1 -right-1 w-2 h-2 rounded-full bg-gradient-to-br from-[#dfc1a0] to-[#3a200a] shadow-md border border-[#C7A26A]/40" />
-
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={() => setActiveTab('menu')}
-                    className="p-2.5 rounded-xl bg-white/5 hover:bg-[#6B4423] text-[#C7A26A] hover:text-white transition-all border border-transparent hover:border-white/5"
-                  >
-                    <LayoutGrid size={20} />
-                  </motion.button>
-                  
-                  <div className="w-[1px] h-6 bg-[#C7A26A]/20 mx-1" />
-
-                  {tabs.filter(t => t.id !== 'menu').map((tab) => {
-                    const isActive = activeTab === tab.id;
-                    return (
-                      <motion.button
-                        key={tab.id}
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => setActiveTab(tab.id as Tab)}
-                        className={cn(
-                          "relative p-2.5 rounded-xl transition-all duration-300 group",
-                          isActive 
-                            ? "bg-[#B32025] text-white shadow-[0_4px_12px_rgba(179,32,37,0.35)] border border-[#ff3e47]/20" 
-                            : "text-[#C7A26A] hover:bg-[#6B4423]/50 hover:text-[#fddcb4]"
-                        )}
-                      >
-                        <tab.icon size={20} strokeWidth={isActive ? 2.5 : 2} />
-                        
-                        {/* Tooltip */}
-                        <div className="absolute top-14 left-1/2 -translate-x-1/2 px-2.5 py-1.5 bg-[#3A2414] border border-[#C7A26A]/30 rounded-lg text-[8px] font-black uppercase tracking-widest text-[#fdefd1] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
-                          {tab.label}
-                        </div>
-                      </motion.button>
-                    );
-                  })}
-                </motion.nav>
-              </AnimatePresence>
-            </div>
+            {/* Centered Navigation Spacer */}
+            <div className="flex-1 hidden lg:flex justify-center pointer-events-auto" />
 
             <div className="flex items-center justify-end gap-8 w-1/4 pointer-events-auto">
                {/* Dynamic Breadcrumb */}
