@@ -573,7 +573,7 @@ export default function InitialMenu({ onSelect, focusedIndex, setFocusedIndex }:
 
           {/* Right author attribution */}
           <span className="sm:pr-8 text-center sm:text-right font-semibold select-none text-[#cca285]">
-            Sistema Web • Criado por <span className="text-[#f1daaf] font-black tracking-wide">Jefferson Augusto</span>
+            Sistema Web • Criado por <span className="text-[#f1daaf] font-black tracking-wide">Jefferson Augusto</span> • Matrícula 10-85447
           </span>
         </div>
       </div>

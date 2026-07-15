@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Lock, User, LogIn, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { toAbsoluteUrl } from '../utils/url';
+import bgImage from '../assets/images/tres_coracoes_wallpaper_1784144600803.jpg';
 
 interface LoginProps {
   onLoginSuccess: (username: string) => void;
@@ -36,17 +38,28 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#2D1A10]">
+    <div 
+      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#2D1A10]"
+      style={{
+        backgroundImage: `url(${toAbsoluteUrl(bgImage)})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+      }}
+    >
       {/* Decorative Warm Light Radial Glow */}
       <div 
-        className="absolute inset-0 pointer-events-none opacity-30" 
+        className="absolute inset-0 pointer-events-none opacity-40 bg-black/30" 
+      />
+      
+      <div 
+        className="absolute inset-0 pointer-events-none opacity-60" 
         style={{ 
-          backgroundImage: 'radial-gradient(circle at center, rgba(202, 26, 32, 0.25) 0%, transparent 70%)' 
+          backgroundImage: 'radial-gradient(circle at center, rgba(202, 26, 32, 0.45) 0%, transparent 80%)' 
         }} 
       />
 
       {/* Decorative subtle texture/vignette */}
-      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-amber-900/40 via-stone-900/60 to-black" />
+      <div className="absolute inset-0 pointer-events-none opacity-70 bg-[radial-gradient(ellipse_at_bottom,_var(--tw-gradient-stops))] from-black/80 via-black/40 to-black/20" />
 
       {/* Login Card */}
       <motion.div

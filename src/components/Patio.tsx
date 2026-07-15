@@ -3332,7 +3332,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
           {/* Right author attribution */}
           <span className="md:pr-8 text-center md:text-right select-none text-[#cca285]">
-            Sistema Web • Criado por <span className="text-[#f1daaf] font-black tracking-wide">Jefferson Augusto</span>
+            Sistema Web • Criado por <span className="text-[#f1daaf] font-black tracking-wide">Jefferson Augusto</span> • Matrícula 10-85447
           </span>
         </div>
       </div>
