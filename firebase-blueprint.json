@@ -1,0 +1,23 @@
+{
+  "entities": {
+    "PatioItem": {
+      "title": "PatioItem",
+      "description": "A vehicle record in the patio.",
+      "type": "object",
+      "properties": {
+        "cavalo": { "type": "string" },
+        "carreta": { "type": "string" },
+        "destino": { "type": "string" },
+        "estaNoPatio": { "type": "string", "enum": ["Sim", "Não"] },
+        "assinado": { "type": "string", "enum": ["Sim", "Não"] }
+      },
+      "required": ["cavalo", "carreta", "destino", "estaNoPatio", "assinado"]
+    }
+  },
+  "firestore": {
+    "/patioItems/{itemId}": {
+      "schema": { "$ref": "#/entities/PatioItem" },
+      "description": "List of patio items"
+    }
+  }
+}

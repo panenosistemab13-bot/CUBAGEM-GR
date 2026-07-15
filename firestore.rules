@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    function isValidPatioItem(data) {
+      return data.keys().hasAll(['cavalo', 'carreta', 'destino', 'estaNoPatio', 'assinado']) && 
+             data.keys().size() == 5 &&
+             data.cavalo is string && data.cavalo.size() <= 100 &&
+             data.carreta is string && data.carreta.size() <= 100 &&
+             data.destino is string && data.destino.size() <= 200 &&
+             data.estaNoPatio in ['Sim', 'Não'] &&
+             data.assinado in ['Sim', 'Não'];
+    }
+
+    match /patioItems/{itemId} {
+      allow read: if true; 
+      
+      allow create: if isValidId(itemId) && 
+                       isValidPatioItem(incoming());
+                       
+      allow update: if isValidPatioItem(incoming()) && (
+        incoming().diff(existing()).affectedKeys().hasOnly(['estaNoPatio', 'assinado', 'cavalo', 'carreta', 'destino'])
+      );
+      
+      allow delete: if true;
+    }
+  }
+}

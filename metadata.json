@@ -1,0 +1,8 @@
+{
+  "name": "c u b a g e m",
+  "description": "Plataforma avançada de gerenciamento de risco com controle de presença 12x36 e estética futurista de alta densidade.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
