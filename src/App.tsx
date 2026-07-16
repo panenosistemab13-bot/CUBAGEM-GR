@@ -513,7 +513,7 @@ export default function App() {
           activeTab === 'menu' ? "overflow-hidden" : "overflow-y-visible md:overflow-y-auto pb-4 md:pb-8"
         )}>
           <div className={cn(
-            "w-full max-w-[102rem] mx-auto relative z-10 flex flex-col transition-all duration-500",
+            "w-full max-w-full relative z-10 flex flex-col transition-all duration-500",
             activeTab === 'menu' ? "h-full p-0" : "min-h-full p-4 sm:p-6 md:p-8"
           )}>
             {activeTab !== 'menu' && activeTab !== 'cubagem' && activeTab !== 'presence' && activeTab !== 'averbacao' && (

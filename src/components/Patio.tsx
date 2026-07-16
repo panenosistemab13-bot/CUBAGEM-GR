@@ -22,7 +22,8 @@ import {
   X,
   Save,
   FileText,
-  Clock
+  Clock,
+  Filter
 } from 'lucide-react';
 import { ref, push, set, onValue, remove, update } from 'firebase/database';
 import { rtdb as db, handleFirestoreError, OperationType } from '../firebase';
@@ -78,19 +79,22 @@ const WoodenPlaque: React.FC<{
 const LicensePlate: React.FC<{ 
   plate: string; 
   type?: 'cavalo' | 'carreta'; 
-}> = ({ plate, type }) => {
+  size?: 'sm' | 'md';
+}> = ({ plate, type, size = 'md' }) => {
   if (!plate || plate === '-') return <span className="text-[#5c3c24] font-mono font-bold">-</span>;
   
   const cleanPlate = plate.trim().toUpperCase();
   const isCarreta = type === 'carreta';
   const isCavalo = type === 'cavalo';
+  const isSmall = size === 'sm';
   
   // Custom headers based on plate type
   const headerText = isCavalo ? 'CAVALO' : isCarreta ? 'CARRETA' : 'BRASIL';
   
   // Outer container color & border classes
   const plateContainerClasses = cn(
-    "inline-flex flex-col items-center justify-center overflow-hidden select-none font-mono tracking-wider w-[120px] h-[40px] shrink-0 transform transition-transform hover:scale-105 rounded-lg shadow-[0_4px_8px_rgba(0,0,0,0.35)]",
+    "inline-flex flex-col items-center justify-center overflow-hidden select-none font-mono tracking-wider shrink-0 transform transition-transform hover:scale-105 rounded-lg shadow-[0_4px_8px_rgba(0,0,0,0.35)]",
+    isSmall ? "w-[95px] h-[32px] rounded-md" : "w-[120px] h-[40px] rounded-lg",
     isCarreta 
       ? "bg-[#fffde7] border-2 border-[#e6b800]" 
       : "bg-[#f7f4ed] border-2 border-[#5c3c24]/80"
@@ -107,21 +111,21 @@ const LicensePlate: React.FC<{
   return (
     <div className={plateContainerClasses}>
       {/* Blue Mercosul Header */}
-      <div className="w-full bg-[#0051A2] h-[10px] flex items-center justify-between px-1.5 leading-none relative">
-        <span className="text-[5px] text-white font-sans font-bold scale-95">BR</span>
-        <span className="text-[6.5px] text-white font-sans font-black tracking-widest uppercase absolute left-1/2 -translate-x-1/2">
+      <div className={cn("w-full bg-[#0051A2] flex items-center justify-between px-1.5 leading-none relative", isSmall ? "h-[8px]" : "h-[10px]")}>
+        <span className={cn("text-white font-sans font-bold scale-95", isSmall ? "text-[4.5px]" : "text-[5px]")}>BR</span>
+        <span className={cn("text-white font-sans font-black tracking-widest uppercase absolute left-1/2 -translate-x-1/2", isSmall ? "text-[5.5px]" : "text-[6.5px]")}>
           {headerText}
         </span>
         {/* Tiny Brazil Flag */}
-        <div className="w-[8px] h-[5.5px] bg-[#009b3a] border border-white/20 flex items-center justify-center relative rounded-[1px] overflow-hidden">
-          <div className="w-[4.5px] h-[3px] bg-yellow-400 rotate-45 transform flex items-center justify-center">
-            <div className="w-[1.5px] h-[1.5px] bg-blue-800 rounded-full"></div>
+        <div className={cn("bg-[#009b3a] border border-white/20 flex items-center justify-center relative rounded-[1px] overflow-hidden", isSmall ? "w-[6.5px] h-[4.5px]" : "w-[8px] h-[5.5px]")}>
+          <div className={cn("bg-yellow-400 rotate-45 transform flex items-center justify-center", isSmall ? "w-[3.5px] h-[2px]" : "w-[4.5px] h-[3px]")}>
+            <div className={cn("bg-blue-800 rounded-full", isSmall ? "w-[1px] h-[1px]" : "w-[1.5px] h-[1.5px]")}></div>
           </div>
         </div>
       </div>
       {/* License plate characters */}
       <div className={charBgClasses}>
-        <span className="text-[#1a1c1d] font-black text-[15px] tracking-wide leading-none select-all animate-fade-in" style={{ textShadow: isCarreta ? '0.5px 0.5px 0px rgba(255, 255, 255, 0.4)' : '0.5px 0.5px 0px rgba(255, 255, 255, 0.8)' }}>
+        <span className={cn("text-[#1a1c1d] font-black tracking-wide leading-none select-all animate-fade-in", isSmall ? "text-[12px]" : "text-[15px]")} style={{ textShadow: isCarreta ? '0.5px 0.5px 0px rgba(255, 255, 255, 0.4)' : '0.5px 0.5px 0px rgba(255, 255, 255, 0.8)' }}>
           {cleanPlate}
         </span>
       </div>
@@ -397,21 +401,57 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     carreta: string;
     m3: string;
     inseridoEm: string;
+    mes?: string;
+    dia?: string;
+    data?: string;
+    transportador?: string;
+    pallets?: string;
+    pbt?: string;
   }
 
   // Cubagem states
   const [cubagemData, setCubagemData] = useState<CubagemItem[]>([]);
   const [cubagemSearch, setCubagemSearch] = useState('');
+  const [cubagemCarrierFilter, setCubagemCarrierFilter] = useState('');
+  const [cubagemDateFilter, setCubagemDateFilter] = useState('');
   const [cubagemPdfFile, setCubagemPdfFile] = useState<File | null>(null);
   const [isProcessingCubagem, setIsProcessingCubagem] = useState(false);
   const [cubagemStatusMsg, setCubagemStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [editingGroupItems, setEditingGroupItems] = useState<{ 
+    id: string; 
+    carreta: string; 
+    m3: string;
+    mes?: string;
+    dia?: string;
+    data?: string;
+    transportador?: string;
+    pallets?: string;
+    pbt?: string;
+  }[]>([]);
 
   // Manual input states
   const [manualCavalo, setManualCavalo] = useState('');
   const [manualCarreta, setManualCarreta] = useState('');
   const [manualM3, setManualM3] = useState('');
+  const [manualMes, setManualMes] = useState('');
+  const [manualDia, setManualDia] = useState('');
+  const [manualData, setManualData] = useState('');
+  const [manualTransportador, setManualTransportador] = useState('');
+  const [manualPallets, setManualPallets] = useState('');
+  const [manualPbt, setManualPbt] = useState('');
   const [cubagemPasteText, setCubagemPasteText] = useState('');
-  const [parsedPreviewItems, setParsedPreviewItems] = useState<{ cavalo: string; carreta: string; m3: string; status: 'ready' | 'duplicate' | 'invalid' }[]>([]);
+  const [parsedPreviewItems, setParsedPreviewItems] = useState<{ 
+    cavalo: string; 
+    carreta: string; 
+    m3: string; 
+    status: 'ready' | 'duplicate' | 'invalid';
+    mes?: string;
+    dia?: string;
+    data?: string;
+    transportador?: string;
+    pallets?: string;
+    pbt?: string;
+  }[]>([]);
   const [isShowingPreview, setIsShowingPreview] = useState(false);
   const [lastImportedIds, setLastImportedIds] = useState<string[]>([]);
 
@@ -697,11 +737,23 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         cavalo: cleanCavalo,
         carreta: cleanCarreta,
         m3: manualM3.trim(),
+        mes: manualMes.trim(),
+        dia: manualDia.trim(),
+        data: manualData.trim(),
+        transportador: manualTransportador.trim(),
+        pallets: manualPallets.trim(),
+        pbt: manualPbt.trim(),
         inseridoEm: new Date().toISOString()
       });
       setManualCavalo('');
       setManualCarreta('');
       setManualM3('');
+      setManualMes('');
+      setManualDia('');
+      setManualData('');
+      setManualTransportador('');
+      setManualPallets('');
+      setManualPbt('');
       setCubagemStatusMsg({ type: 'success', text: 'Cubagem adicionada com sucesso!' });
       setTimeout(() => setCubagemStatusMsg(null), 3000);
     } catch (error) {
@@ -713,36 +765,64 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
   const handleSaveEditCubagem = async (id: string) => {
     if (isReadOnly) return;
-    if (!editingCavalo.trim() || !editingCarreta.trim() || !editingM3.trim()) {
-      setCubagemStatusMsg({ type: 'error', text: 'Preencha todos os campos para salvar.' });
+    
+    if (!editingCavalo.trim()) {
+      setCubagemStatusMsg({ type: 'error', text: 'Preencha a Placa Cavalo.' });
       setTimeout(() => setCubagemStatusMsg(null), 3000);
       return;
     }
 
-    const cleanCarreta = editingCarreta.replace(/[\s-]/g, '').toUpperCase();
-    const cleanCavalo = editingCavalo.replace(/[\s-]/g, '').toUpperCase();
-
-    // Verificação de duplicidade de Carreta, ignorando o próprio item
-    const exists = cubagemData.some(item => item.id !== id && item.carreta.replace(/[\s-]/g, '').toUpperCase() === cleanCarreta);
-    if (exists) {
-      setCubagemStatusMsg({ type: 'error', text: `Outra Carreta já possui a placa ${cleanCarreta} cadastrada!` });
-      setTimeout(() => setCubagemStatusMsg(null), 4000);
+    if (editingGroupItems.length === 0) {
+      setCubagemStatusMsg({ type: 'error', text: 'Nenhum item em edição.' });
+      setTimeout(() => setCubagemStatusMsg(null), 3000);
       return;
     }
 
+    // Verify all carretas and m3 values are filled
+    for (let i = 0; i < editingGroupItems.length; i++) {
+      const sub = editingGroupItems[i];
+      if (!sub.carreta.trim() || !sub.m3.trim()) {
+        setCubagemStatusMsg({ type: 'error', text: `Preencha todos os campos da ${i + 1}ª Carreta.` });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+        return;
+      }
+    }
+
+    const cleanCavalo = editingCavalo.replace(/[\s-]/g, '').toUpperCase();
+    
+    // Check duplicates for each carreta being edited
+    for (const sub of editingGroupItems) {
+      const cleanCarreta = sub.carreta.replace(/[\s-]/g, '').toUpperCase();
+      const exists = cubagemData.some(item => item.id !== sub.id && item.carreta.replace(/[\s-]/g, '').toUpperCase() === cleanCarreta);
+      if (exists) {
+        setCubagemStatusMsg({ type: 'error', text: `Outra Carreta já possui a placa ${cleanCarreta} cadastrada!` });
+        setTimeout(() => setCubagemStatusMsg(null), 4000);
+        return;
+      }
+    }
+
     try {
-      await update(ref(db, `patio/cubagem/${id}`), {
-        cavalo: cleanCavalo,
-        carreta: cleanCarreta,
-        m3: editingM3.trim()
-      });
+      const updates: Record<string, any> = {};
+      for (const sub of editingGroupItems) {
+        updates[`patio/cubagem/${sub.id}/cavalo`] = cleanCavalo;
+        updates[`patio/cubagem/${sub.id}/carreta`] = sub.carreta.replace(/[\s-]/g, '').toUpperCase();
+        updates[`patio/cubagem/${sub.id}/m3`] = sub.m3.trim();
+        updates[`patio/cubagem/${sub.id}/mes`] = sub.mes?.trim() || '';
+        updates[`patio/cubagem/${sub.id}/dia`] = sub.dia?.trim() || '';
+        updates[`patio/cubagem/${sub.id}/data`] = sub.data?.trim() || '';
+        updates[`patio/cubagem/${sub.id}/transportador`] = sub.transportador?.trim() || '';
+        updates[`patio/cubagem/${sub.id}/pallets`] = sub.pallets?.trim() || '';
+        updates[`patio/cubagem/${sub.id}/pbt`] = sub.pbt?.trim() || '';
+      }
+      await update(ref(db), updates);
       setEditingCubagemId(null);
-      setCubagemStatusMsg({ type: 'success', text: 'Cubagem atualizada com sucesso!' });
+      setEditingGroupItems([]);
+      setCubagemStatusMsg({ type: 'success', text: 'Registro(s) de cubagem updated com sucesso!' });
       setTimeout(() => setCubagemStatusMsg(null), 3000);
     } catch (error) {
       console.error("Erro ao salvar edição de cubagem:", error);
       setCubagemStatusMsg({ type: 'error', text: 'Erro ao salvar alterações.' });
-      setTimeout(() => setCubagemStatusMsg(null), 3000);
+      setTimeout(() => setCubagemStatusMsg(null), 4000);
     }
   };
 
@@ -751,14 +831,27 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     setEditingCavalo('');
     setEditingCarreta('');
     setEditingM3('');
+    setEditingGroupItems([]);
   };
 
-  const handleDeleteCubagem = async (id: string) => {
+  const handleDeleteCubagem = async (ids: string | string[]) => {
     if (isReadOnly) return;
-    try {
-      await remove(ref(db, `patio/cubagem/${id}`));
-    } catch (error) {
-      console.error("Erro ao excluir cubagem:", error);
+    const targetIds = Array.isArray(ids) ? ids : [ids];
+    const label = targetIds.length > 1 ? 'o conjunto de cubagens' : 'a cubagem';
+    if (window.confirm(`Tem certeza que deseja excluir ${label}?`)) {
+      try {
+        const updates: Record<string, any> = {};
+        for (const id of targetIds) {
+          updates[`patio/cubagem/${id}`] = null;
+        }
+        await update(ref(db), updates);
+        setCubagemStatusMsg({ type: 'success', text: 'Excluído com sucesso!' });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+      } catch (error) {
+        console.error("Erro ao excluir cubagem:", error);
+        setCubagemStatusMsg({ type: 'error', text: 'Erro ao excluir cubagem.' });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+      }
     }
   };
 
@@ -876,9 +969,38 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     }
 
     const lines = cubagemPasteText.split(/\r?\n/);
-    const previewList: { cavalo: string; carreta: string; m3: string; status: 'ready' | 'duplicate' | 'invalid' }[] = [];
+    const previewList: { 
+      cavalo: string; 
+      carreta: string; 
+      m3: string; 
+      status: 'ready' | 'duplicate' | 'invalid';
+      mes?: string;
+      dia?: string;
+      data?: string;
+      transportador?: string;
+      pallets?: string;
+      pbt?: string;
+    }[] = [];
     const processedCarretasInBatch = new Set<string>();
     let skippedCount = 0;
+
+    // Helper to parse line into cells keeping empty cells intact
+    const parseLineToCells = (lineStr: string): string[] => {
+      let delimiter = '';
+      if (lineStr.includes('\t')) delimiter = '\t';
+      else if (lineStr.includes(';')) delimiter = ';';
+
+      if (delimiter) {
+        return lineStr.split(delimiter).map(cell => cell.trim());
+      } else {
+        // Fallback to splitting by multiple spaces
+        const words = lineStr.split(/\s{2,}/).map(w => w.trim()).filter(Boolean);
+        if (words.length <= 1) {
+          return lineStr.split(/\s+/).map(w => w.trim()).filter(Boolean);
+        }
+        return words;
+      }
+    };
 
     // First, scan for a header row to see if we can map columns dynamically
     let cavaloColIndex = -1;
@@ -886,57 +1008,84 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     let m3ColIndex = -1;
     let palletsColIndex = -1;
     let pbtColIndex = -1;
+    let mesColIndex = -1;
+    let diaColIndex = -1;
+    let dataColIndex = -1;
+    let transportadorColIndex = -1;
 
     for (let i = 0; i < Math.min(10, lines.length); i++) {
-      const line = lines[i].trim().toLowerCase();
+      const line = lines[i].trim();
       if (!line) continue;
       
-      const words = line.split(/[\t;|]+/).map(w => w.trim()).filter(Boolean);
-      let finalWords = words;
-      if (words.length <= 1) {
-        finalWords = line.split(/\s{2,}/).map(w => w.trim()).filter(Boolean);
-        if (finalWords.length <= 1) {
-          finalWords = line.split(/\s+/).map(w => w.trim()).filter(Boolean);
-        }
-      }
+      const finalWords = parseLineToCells(line);
+      const finalWordsLower = finalWords.map(w => w.toLowerCase());
 
-      const hasCavalo = finalWords.some(w => w.includes('cavalo') || w.includes('placa'));
-      const hasCarreta = finalWords.some(w => w.includes('carreta') || w.includes('reboque'));
-      const hasM3 = finalWords.some(w => w.includes('m³') || w.includes('m3') || w.includes('cubagem') || w.includes('vol') || w.includes('volume'));
-      const hasPallets = finalWords.some(w => w.includes('palet') || w.includes('pallet') || w.includes('plts'));
-      const hasPbt = finalWords.some(w => w.includes('pbt') || w.includes('ton'));
+      const hasCavalo = finalWordsLower.some(w => w.includes('cavalo') || w.includes('placa'));
+      const hasCarreta = finalWordsLower.some(w => w.includes('carreta') || w.includes('reboque'));
+      const hasM3 = finalWordsLower.some(w => w.includes('m³') || w.includes('m3') || w.includes('cubagem') || w.includes('vol') || w.includes('volume'));
+      const hasPallets = finalWordsLower.some(w => w.includes('palet') || w.includes('pallet') || w.includes('plts') || w.includes('nº pal'));
+      const hasPbt = finalWordsLower.some(w => w.includes('pbt') || w.includes('ton'));
+      const hasMes = finalWordsLower.some(w => w === 'mês' || w === 'mes');
+      const hasDia = finalWordsLower.some(w => w === 'dia');
+      const hasData = finalWordsLower.some(w => w === 'data');
+      const hasTransportador = finalWordsLower.some(w => w.includes('transportador') || w.includes('transp'));
 
-      if (hasCavalo || hasCarreta || hasM3 || hasPallets || hasPbt) {
-        for (let j = 0; j < finalWords.length; j++) {
-          const w = finalWords[j];
+      if (hasCavalo || hasCarreta || hasM3 || hasPallets || hasPbt || hasMes || hasDia || hasData || hasTransportador) {
+        for (let j = 0; j < finalWordsLower.length; j++) {
+          const w = finalWordsLower[j];
+          if (!w) continue;
+
+          // CRITICAL SAFETY EXCLUSION: Skip matching headers belonging to columns C, F, G, H, K, L
+          if (
+            w === 'origem' ||
+            w.includes('contato whats') ||
+            w.includes('hora liberado') ||
+            w === 'status' ||
+            w.includes('fez contato?') ||
+            w.includes('destino')
+          ) {
+            continue;
+          }
+
           if (w.includes('cavalo') || (w.includes('placa') && !w.includes('carreta') && !w.includes('reboque'))) {
             cavaloColIndex = j;
           } else if (w.includes('carreta') || w.includes('reboque') || w.includes('semi')) {
             carretaColIndex = j;
           } else if (w.includes('m³') || w.includes('m3') || w.includes('cubagem') || w.includes('vol') || w.includes('volume')) {
             m3ColIndex = j;
-          } else if (w.includes('palet') || w.includes('pallet') || w.includes('plt') || w.includes('n°')) {
+          } else if (w.includes('palet') || w.includes('pallet') || w.includes('plt') || w.includes('n°') || w.includes('nº')) {
             palletsColIndex = j;
           } else if (w.includes('pbt') || w.includes('ton') || w.includes('peso')) {
             pbtColIndex = j;
+          } else if (w === 'mês' || w === 'mes') {
+            mesColIndex = j;
+          } else if (w === 'dia') {
+            diaColIndex = j;
+          } else if (w === 'data') {
+            dataColIndex = j;
+          } else if (w.includes('transportador') || w.includes('transp')) {
+            transportadorColIndex = j;
           }
         }
         break; // Found header, stop scanning
       }
     }
 
+    // Set up forbidden indices relative to mesColIndex or 0 as offset
+    const offset = mesColIndex !== -1 ? mesColIndex : 0;
+    const forbiddenIndices = [
+      offset + 1,  // Column C (Origem)
+      offset + 4,  // Column F (Contato Whats)
+      offset + 5,  // Column G (Hora Liberado)
+      offset + 6,  // Column H (Status)
+      offset + 9,  // Column K (Fez Contato?)
+      offset + 10  // Column L (Destino)
+    ];
+
     for (const line of lines) {
       if (!line.trim()) continue;
 
-      // Note: do NOT split by comma to preserve decimal floats (e.g. 41,5)
-      const words = line.split(/[\t;|]+/).map(w => w.trim()).filter(Boolean);
-      let finalWords = words;
-      if (words.length <= 1) {
-        finalWords = line.split(/\s{2,}/).map(w => w.trim()).filter(Boolean);
-        if (finalWords.length <= 1) {
-          finalWords = line.split(/\s+/).map(w => w.trim()).filter(Boolean);
-        }
-      }
+      const finalWords = parseLineToCells(line);
 
       // If it's a header line, skip it
       const lineLower = line.toLowerCase();
@@ -946,8 +1095,12 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
       const platesInLine: string[] = [];
 
-      // Find valid plates on this line
-      for (const word of finalWords) {
+      // Find valid plates on this line, strictly ignoring forbidden columns
+      for (let colIdx = 0; colIdx < finalWords.length; colIdx++) {
+        if (forbiddenIndices.includes(colIdx)) {
+          continue; // PULE E NÃO PUXE
+        }
+        const word = finalWords[colIdx];
         const cleanWord = word.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
         if (isPlate(cleanWord)) {
           if (!platesInLine.includes(cleanWord)) {
@@ -968,7 +1121,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
       // CASE A: We mapped a valid m3ColIndex from the header
       if (m3ColIndex !== -1) {
-        if (m3ColIndex < finalWords.length) {
+        if (m3ColIndex < finalWords.length && !forbiddenIndices.includes(m3ColIndex)) {
           const targetWord = finalWords[m3ColIndex];
           const cleanWordForNum = targetWord.replace(/[^0-9.,]/g, '').replace(',', '.');
           const num = parseFloat(cleanWordForNum);
@@ -983,9 +1136,13 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         }
       } else {
         // CASE B: Fallback heuristic (no header, or mapped index invalid)
-        // Collect all numeric candidates in the line
+        // Collect all numeric candidates in the line, ignoring forbidden columns
         const candidates: { val: number; strVal: string }[] = [];
-        for (const word of finalWords) {
+        for (let colIdx = 0; colIdx < finalWords.length; colIdx++) {
+          if (forbiddenIndices.includes(colIdx)) {
+            continue; // PULE E NÃO PUXE
+          }
+          const word = finalWords[colIdx];
           const cleanWordForNum = word.replace(/[^0-9.,]/g, '').replace(',', '.');
           const num = parseFloat(cleanWordForNum);
           const cleanWordUpper = word.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -1006,6 +1163,33 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         }
       }
 
+      // Fetch extra columns dynamically from the mapped header indices, ensuring we never pull from forbidden columns
+      let mesValue = '';
+      let diaValue = '';
+      let dataValue = '';
+      let transportadorValue = '';
+      let palletsValue = '';
+      let pbtValue = '';
+
+      if (mesColIndex !== -1 && mesColIndex < finalWords.length && !forbiddenIndices.includes(mesColIndex)) {
+        mesValue = finalWords[mesColIndex].trim();
+      }
+      if (diaColIndex !== -1 && diaColIndex < finalWords.length && !forbiddenIndices.includes(diaColIndex)) {
+        diaValue = finalWords[diaColIndex].trim();
+      }
+      if (dataColIndex !== -1 && dataColIndex < finalWords.length && !forbiddenIndices.includes(dataColIndex)) {
+        dataValue = finalWords[dataColIndex].trim();
+      }
+      if (transportadorColIndex !== -1 && transportadorColIndex < finalWords.length && !forbiddenIndices.includes(transportadorColIndex)) {
+        transportadorValue = finalWords[transportadorColIndex].trim();
+      }
+      if (palletsColIndex !== -1 && palletsColIndex < finalWords.length && !forbiddenIndices.includes(palletsColIndex)) {
+        palletsValue = finalWords[palletsColIndex].trim();
+      }
+      if (pbtColIndex !== -1 && pbtColIndex < finalWords.length && !forbiddenIndices.includes(pbtColIndex)) {
+        pbtValue = finalWords[pbtColIndex].trim();
+      }
+
       // Requer pelo menos 1 placa (carreta) e um valor de cubagem não-vazio
       // Se a coluna m3Value estiver vazia, não importamos a placa! (Regra solicitada pelo usuário)
       if (carreta && m3Value) {
@@ -1015,9 +1199,31 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         const isDuplicateInBatch = processedCarretasInBatch.has(cleanCarreta);
 
         if (existsInDb || isDuplicateInBatch) {
-          previewList.push({ cavalo, carreta, m3: m3Value, status: 'duplicate' });
+          previewList.push({ 
+            cavalo, 
+            carreta, 
+            m3: m3Value, 
+            status: 'duplicate',
+            mes: mesValue,
+            dia: diaValue,
+            data: dataValue,
+            transportador: transportadorValue,
+            pallets: palletsValue,
+            pbt: pbtValue
+          });
         } else {
-          previewList.push({ cavalo, carreta, m3: m3Value, status: 'ready' });
+          previewList.push({ 
+            cavalo, 
+            carreta, 
+            m3: m3Value, 
+            status: 'ready',
+            mes: mesValue,
+            dia: diaValue,
+            data: dataValue,
+            transportador: transportadorValue,
+            pallets: palletsValue,
+            pbt: pbtValue
+          });
           processedCarretasInBatch.add(cleanCarreta);
         }
       } else {
@@ -1060,6 +1266,12 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
             cavalo: item.cavalo,
             carreta: item.carreta,
             m3: item.m3,
+            mes: item.mes || '',
+            dia: item.dia || '',
+            data: item.data || '',
+            transportador: item.transportador || '',
+            pallets: item.pallets || '',
+            pbt: item.pbt || '',
             inseridoEm: new Date().toISOString()
           });
           newlyAddedIds.push(newId);
@@ -1261,7 +1473,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
         let delimiter = '\t';
         const checkLinesCount = Math.min(linhas.length, 5);
-        const delimiters = ['\t', ';', '|', ','];
+        const delimiters = ['\t', ';', ','];
         let bestDelimiter = '\t';
         let maxDelimiterScore = -1;
         
@@ -1643,6 +1855,37 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
   const safeData = Array.isArray(patioData) ? patioData : [];
 
+  // Extract unique carriers and dates from cubagemData
+  const uniqueCarriers = Array.from(
+    new Set(
+      cubagemData
+        .map(item => item.transportador?.trim().toUpperCase())
+        .filter(Boolean)
+    )
+  ).sort() as string[];
+
+  const uniqueDates = (Array.from(
+    new Set(
+      cubagemData
+        .map(item => item.data?.trim())
+        .filter(Boolean)
+    )
+  ) as string[]).sort((a, b) => {
+    const partsA = a.split('/');
+    const partsB = b.split('/');
+    const dateA = new Date(
+      partsA[2] ? parseInt(partsA[2], 10) : new Date().getFullYear(),
+      partsA[1] ? parseInt(partsA[1], 10) - 1 : 0,
+      partsA[0] ? parseInt(partsA[0], 10) : 1
+    );
+    const dateB = new Date(
+      partsB[2] ? parseInt(partsB[2], 10) : new Date().getFullYear(),
+      partsB[1] ? parseInt(partsB[1], 10) - 1 : 0,
+      partsB[0] ? parseInt(partsB[0], 10) : 1
+    );
+    return dateB.getTime() - dateA.getTime();
+  }) as string[];
+
   const filteredData = safeData.filter(item => {
     const matchesSearch = (item?.cavalo && item.cavalo.toLowerCase().includes(searchTerm.toLowerCase())) || 
                           (item?.carreta && item.carreta.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -1661,7 +1904,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     >
       
        {/* ================= HEADER AREA ================= */}
-      <div className="w-full flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 max-w-[94rem] mx-auto mt-2 mb-6 shrink-0">
+      <div className="w-full flex flex-col md:flex-row items-center justify-between gap-6 relative z-10 max-w-full mx-auto mt-2 mb-6 shrink-0">
         
         {/* Left title and logo stack */}
         <div className="flex flex-col sm:flex-row sm:items-center gap-5 text-left w-full md:w-auto">
@@ -1728,7 +1971,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       {activeSubTab === 'patio' ? (
         <>
           {/* ================= HERO OPERATIONAL MONITORS PLAQUE ================= */}
-      <div className="hidden md:block w-full relative z-10 max-w-[94rem] mx-auto mt-6 shrink-0">
+      <div className="hidden md:block w-full relative z-10 max-w-full mx-auto mt-6 shrink-0">
         <WoodenPlaque className="py-4 px-6 md:px-8 flex flex-col md:flex-row items-center justify-center gap-6" screwSize="w-2.5 h-2.5">
           {/* Core Metrics Widgets */}
           <div className="grid grid-cols-2 md:flex md:flex-wrap items-center justify-center gap-3 sm:gap-4 w-full md:w-auto">
@@ -1790,10 +2033,10 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       </div>
 
       {/* ================= CONTROLLER CODES & DATA GRID PANEL ================= */}
-      <div className="w-full relative z-10 max-w-[94rem] mx-auto mt-6 flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0">
+      <div className="w-full relative z-10 max-w-full mx-auto mt-6 flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0">
         
         {/* LEFT COLUMN: INGESTION CONSOLE PLAQUE */}
-        <div className={cn("lg:col-span-4 h-full flex flex-col", mobileTab === 'importar' ? "flex" : "hidden lg:flex")}>
+        <div className={cn("lg:col-span-3 h-full flex flex-col", mobileTab === 'importar' ? "flex" : "hidden lg:flex")}>
           <WoodenPlaque className="h-full flex-1" screwSize="w-2.5 h-2.5">
             <div className="flex items-center gap-3 mb-6 pb-2 border-b-2 border-[#5c3c24]/10 text-left">
               <Database size={18} className="text-[#8c060a]" />
@@ -1927,7 +2170,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         </div>
 
         {/* RIGHT COLUMN: CORE MONITOR DATA TABLE SCREEN */}
-        <div className={cn("lg:col-span-8 h-full flex flex-col min-h-[22rem] lg:min-h-[30rem]", mobileTab === 'lista' ? "flex" : "hidden lg:flex")}>
+        <div className={cn("lg:col-span-9 h-full flex flex-col min-h-[22rem] lg:min-h-[30rem]", mobileTab === 'lista' ? "flex" : "hidden lg:flex")}>
           <WoodenPlaque className="h-full flex-1" screwSize="w-2.5 h-2.5">
             
             {/* Header filters and Search bar */}
@@ -2165,10 +2408,10 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         </>
       ) : activeSubTab === 'disponibilidade' ? (
         /* ================= DISPONIBILIDADE CONSOLE ================= */
-        <div className="w-full relative z-10 max-w-[94rem] mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0">
+        <div className="w-full relative z-10 max-w-full mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0">
           
           {/* LEFT COLUMN: CONTROL & INPUT */}
-          <div className="lg:col-span-5 h-full flex flex-col">
+          <div className="lg:col-span-3 h-full flex flex-col">
             <WoodenPlaque className="h-full flex-1" screwSize="w-2.5 h-2.5">
               <div className="flex items-center gap-3 mb-6 pb-2 border-b-2 border-[#5c3c24]/10 text-left">
                 <Activity size={18} className="text-[#ca1a20]" />
@@ -2275,7 +2518,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
           </div>
 
           {/* RIGHT COLUMN: INTERACTIVE PREVIEW */}
-          <div className="lg:col-span-7 relative min-h-[500px] lg:min-h-0">
+          <div className="lg:col-span-9 relative min-h-[500px] lg:min-h-0">
             <div className="lg:absolute lg:inset-0 flex flex-col h-full">
               <WoodenPlaque className="h-full flex-1 flex flex-col min-h-0" screwSize="w-2.5 h-2.5">
                 <div className="flex items-center justify-between mb-6 pb-2 border-b-2 border-[#5c3c24]/10 text-left shrink-0">
@@ -2387,10 +2630,10 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         </div>
       ) : activeSubTab === 'iscas' ? (
         /* ================= ISCAS CONSOLE ================= */
-        <div className="w-full relative z-10 max-w-[94rem] mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0 animate-fade-in">
+        <div className="w-full relative z-10 max-w-full mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0 animate-fade-in">
           
           {/* LEFT COLUMN: CONTROL & INPUT */}
-          <div className="lg:col-span-5 h-full flex flex-col">
+          <div className="lg:col-span-3 h-full flex flex-col">
             <WoodenPlaque className="h-full flex-1" screwSize="w-2.5 h-2.5">
               <div className="flex items-center gap-3 mb-6 pb-2 border-b-2 border-[#5c3c24]/10 text-left">
                 <Cpu size={18} className="text-[#ca1a20]" />
@@ -2550,7 +2793,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
           </div>
 
           {/* RIGHT COLUMN: INTERACTIVE PREVIEW */}
-          <div className="lg:col-span-7 h-full flex flex-col min-h-[400px]">
+          <div className="lg:col-span-9 h-full flex flex-col min-h-[400px]">
             <WoodenPlaque className="h-full flex-1 flex flex-col" screwSize="w-2.5 h-2.5">
               <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6 pb-2 border-b-2 border-[#5c3c24]/10">
                 <div className="flex items-center gap-3 text-left">
@@ -2638,10 +2881,10 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
             </button>
           </div>
 
-          <div className="w-full relative z-10 max-w-[94rem] mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-6 min-h-0 animate-fade-in text-left">
+          <div className="w-full relative z-10 max-w-full mx-auto flex-1 flex flex-col lg:grid lg:grid-cols-12 gap-4 min-h-0 animate-fade-in text-left">
             
             {/* LEFT COLUMN: CONTROLS & IMPORT PROGRESS */}
-            <div className={cn("lg:col-span-5 h-full flex flex-col gap-6", mobileCubagemTab === 'importar' ? "flex" : "hidden lg:flex")}>
+            <div className={cn("lg:col-span-3 h-full flex flex-col gap-6", mobileCubagemTab === 'importar' ? "flex" : "hidden lg:flex")}>
             {/* WoodenPlaque for Cubagem Controls */}
             <WoodenPlaque className="flex flex-col gap-5 p-6 h-full" screwSize="w-2.5 h-2.5">
               
@@ -2741,6 +2984,73 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                         />
                       </div>
 
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Mês:</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: JAN"
+                            value={manualMes}
+                            onChange={(e) => setManualMes(e.target.value)}
+                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Dia:</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: sexta-feira"
+                            value={manualDia}
+                            onChange={(e) => setManualDia(e.target.value)}
+                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Data:</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: 02/01"
+                            value={manualData}
+                            onChange={(e) => setManualData(e.target.value)}
+                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Transportador:</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: COMBOIO"
+                          value={manualTransportador}
+                          onChange={(e) => setManualTransportador(e.target.value)}
+                          className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Nº Pallets:</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: 24"
+                            value={manualPallets}
+                            onChange={(e) => setManualPallets(e.target.value)}
+                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">PBT (Ton):</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: 24"
+                            value={manualPbt}
+                            onChange={(e) => setManualPbt(e.target.value)}
+                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                          />
+                        </div>
+                      </div>
+
                       {/* Live Mercosul Plate Preview inside the card */}
                       {(manualCavalo.trim() || manualCarreta.trim()) && (
                         <motion.div 
@@ -2828,27 +3138,39 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     {/* Compact Scrollable Preview List */}
                     <div className="max-h-[16rem] overflow-y-auto divide-y divide-[#5c3c24]/10 border border-[#5c3c24]/30 rounded-xl bg-[#fcfaf7] p-2 space-y-1">
                       {parsedPreviewItems.map((item, index) => (
-                        <div key={index} className="flex items-center justify-between py-2 px-2.5 rounded-lg hover:bg-[#f0dfcc]/30 transition-colors text-[11px] font-semibold font-mono">
-                          <div className="flex items-center gap-2.5">
-                            <span className="text-[9px] text-[#5c3c24]/60 font-bold font-sans">#{index+1}</span>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[#5c3c24]/80 uppercase text-[9.5px]">Cav:</span>
-                              <span className="text-[#311f14] uppercase font-bold">{item.cavalo}</span>
+                        <div key={index} className="flex flex-col gap-1 py-2 px-2.5 rounded-lg hover:bg-[#f0dfcc]/30 transition-colors text-[11px] font-semibold font-mono">
+                          <div className="flex items-center justify-between w-full">
+                            <div className="flex items-center gap-2.5">
+                              <span className="text-[9px] text-[#5c3c24]/60 font-bold font-sans">#{index+1}</span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5c3c24]/80 uppercase text-[9.5px]">Cav:</span>
+                                <span className="text-[#311f14] uppercase font-bold">{item.cavalo}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[#5c3c24]/80 uppercase text-[9.5px]">Car:</span>
+                                <span className="text-[#311f14] uppercase font-bold">{item.carreta}</span>
+                              </div>
                             </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-[#5c3c24]/80 uppercase text-[9.5px]">Car:</span>
-                              <span className="text-[#311f14] uppercase font-bold">{item.carreta}</span>
+                            
+                            <div className="flex items-center gap-3">
+                              <span className="text-[#ca1a20] font-black">{item.m3} M³</span>
+                              {item.status === 'duplicate' ? (
+                                <span className="text-[8px] bg-rose-100 border border-rose-300 text-rose-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">Duplicado</span>
+                              ) : (
+                                <span className="text-[8px] bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">Pronto</span>
+                              )}
                             </div>
                           </div>
-                          
-                          <div className="flex items-center gap-3">
-                            <span className="text-[#ca1a20] font-black">{item.m3} M³</span>
-                            {item.status === 'duplicate' ? (
-                              <span className="text-[8px] bg-rose-100 border border-rose-300 text-rose-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">Duplicado</span>
-                            ) : (
-                              <span className="text-[8px] bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">Pronto</span>
-                            )}
-                          </div>
+                          {(item.mes || item.dia || item.data || item.transportador || item.pallets || item.pbt) && (
+                            <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-[#5c3c24]/80 uppercase font-sans font-bold pl-5">
+                              {item.mes && <span>Mês: <span className="text-[#311f14]">{item.mes}</span></span>}
+                              {item.dia && <span>Dia: <span className="text-[#311f14] capitalize">{item.dia}</span></span>}
+                              {item.data && <span>Data: <span className="text-[#311f14]">{item.data}</span></span>}
+                              {item.transportador && <span>Transp: <span className="text-[#311f14]">{item.transportador}</span></span>}
+                              {item.pallets && <span>Pallets: <span className="text-[#311f14]">{item.pallets}</span></span>}
+                              {item.pbt && <span>PBT: <span className="text-[#311f14]">{item.pbt} TON</span></span>}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -2911,10 +3233,10 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
           </div>
 
           {/* RIGHT COLUMN: MODERN DATABASE TABLE */}
-          <div className={cn("lg:col-span-7 h-full flex flex-col", mobileCubagemTab === 'lista' ? "flex" : "hidden lg:flex")}>
+          <div className={cn("lg:col-span-9 h-full flex flex-col", mobileCubagemTab === 'lista' ? "flex" : "hidden lg:flex")}>
             
             {/* WoodenPlaque Table Container */}
-            <WoodenPlaque className="flex flex-col p-6 h-full" screwSize="w-2.5 h-2.5">
+            <WoodenPlaque className="flex flex-col p-4 sm:p-5 h-full" screwSize="w-2.5 h-2.5">
               
               {/* Header with Search and Clear Database */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 pb-3 border-b border-[#5c3c24]/30 text-left">
@@ -2953,10 +3275,85 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                 </div>
               </div>
 
+              {/* FILTERS PANEL */}
+              <div className="flex flex-wrap items-center gap-4 mb-4 bg-[#f0dfcc]/30 p-3 rounded-2xl border border-[#5c3c24]/20 text-left">
+                <div className="flex items-center gap-2 text-[#5c3c24] text-[10px] font-black uppercase tracking-wider">
+                  <Filter size={14} className="text-[#ca1a20]" />
+                  <span>Filtrar Base:</span>
+                </div>
+                
+                <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                  {/* Transportador Filter Selector */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-[140px]">
+                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap">Transportador:</span>
+                    <select
+                      value={cubagemCarrierFilter}
+                      onChange={(e) => setCubagemCarrierFilter(e.target.value)}
+                      className="w-full sm:w-auto bg-white border border-[#5c3c24]/30 text-[#1c1109] font-bold text-[10px] rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] uppercase cursor-pointer shadow-sm"
+                    >
+                      <option value="">[ TODOS ]</option>
+                      {uniqueCarriers.map(carrier => (
+                        <option key={carrier} value={carrier}>{carrier}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Data Filter Selector */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-[140px]">
+                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap">Data:</span>
+                    <input
+                      type="date"
+                      value={cubagemDateFilter}
+                      onChange={(e) => setCubagemDateFilter(e.target.value)}
+                      className="w-full sm:w-auto bg-white border border-[#5c3c24]/30 text-[#1c1109] font-bold text-[11px] rounded-xl px-2.5 py-1 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] cursor-pointer shadow-sm font-sans"
+                    />
+                  </div>
+
+                  {/* Clear Filters Button (Only shown if any filter is active) */}
+                  {(cubagemCarrierFilter || cubagemDateFilter) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCubagemCarrierFilter('');
+                        setCubagemDateFilter('');
+                      }}
+                      className="text-[9px] font-black text-rose-800 hover:text-white bg-rose-100 hover:bg-rose-700 border border-rose-300 rounded-xl px-3 py-1.5 uppercase tracking-wider transition-all cursor-pointer shadow-sm sm:ml-auto"
+                    >
+                      Limpar Filtros
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* METRICS PANEL (TOTAL PLACAS / CUBAGENS / VOLUME TOTAL ACUMULADO) */}
               {(() => {
+                const formattedFilterDate = (() => {
+                  if (!cubagemDateFilter) return '';
+                  const parts = cubagemDateFilter.split('-');
+                  if (parts.length === 3) {
+                    const [year, month, day] = parts;
+                    return `${day}/${month}/${year}`;
+                  }
+                  return cubagemDateFilter;
+                })();
+
+                const filteredItems = cubagemData.filter(item => {
+                  const search = cubagemSearch.replace(/[\s-]/g, '').toUpperCase();
+                  const matchesSearch = !search ||
+                         item.cavalo.replace(/[\s-]/g, '').toUpperCase().includes(search) ||
+                         item.carreta.replace(/[\s-]/g, '').toUpperCase().includes(search);
+
+                  const matchesCarrier = !cubagemCarrierFilter || 
+                         (item.transportador && item.transportador.trim().toUpperCase() === cubagemCarrierFilter.toUpperCase());
+
+                  const matchesDate = !cubagemDateFilter || 
+                         (item.data && item.data.trim() === formattedFilterDate);
+
+                  return matchesSearch && matchesCarrier && matchesDate;
+                });
+
                 const uniquePlatesSet = new Set<string>();
-                cubagemData.forEach(item => {
+                filteredItems.forEach(item => {
                   if (item.carreta) {
                     const cleanCarreta = item.carreta.replace(/[\s-]/g, '').toUpperCase();
                     if (cleanCarreta) uniquePlatesSet.add(cleanCarreta);
@@ -2967,32 +3364,32 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                   }
                 });
                 const totalPlacasUnicas = uniquePlatesSet.size;
-                const totalCarretas = cubagemData.length;
-                const totalCavalos = cubagemData.filter(item => item.cavalo && item.cavalo !== '---').length;
-                const totalVolume = cubagemData.reduce((acc, item) => {
+                const totalCarretas = filteredItems.length;
+                const totalCavalos = filteredItems.filter(item => item.cavalo && item.cavalo !== '---').length;
+                const totalVolume = filteredItems.reduce((acc, item) => {
                   const val = parseFloat(item.m3.replace(',', '.'));
                   return acc + (isNaN(val) ? 0 : val);
                 }, 0);
 
                 return (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
                     
-                    <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/20 rounded-2xl p-3 text-left shadow-md flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-all">
+                    <div className="hidden bg-[#faf6f0] border-2 border-[#5c3c24]/20 rounded-2xl p-3 text-left shadow-md flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-all">
                       <div className="absolute top-0 left-0 w-full h-0.5 bg-blue-600" />
                       <span className="text-[8.5px] font-black uppercase tracking-wider text-[#5c3c24]/80">Placas Únicas</span>
                       <span className="text-base sm:text-lg font-black text-blue-800 font-mono leading-none mt-1.5">{totalPlacasUnicas}</span>
                     </div>
 
                     <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/20 rounded-2xl p-3 text-left shadow-md flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-all">
-                      <div className="absolute top-0 left-0 w-full h-0.5 bg-emerald-600" />
-                      <span className="text-[8.5px] font-black uppercase tracking-wider text-[#5c3c24]/80">Reboques (Carreta)</span>
-                      <span className="text-base sm:text-lg font-black text-emerald-800 font-mono leading-none mt-1.5">{totalCarretas}</span>
-                    </div>
-
-                    <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/20 rounded-2xl p-3 text-left shadow-md flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-all">
                       <div className="absolute top-0 left-0 w-full h-0.5 bg-purple-600" />
                       <span className="text-[8.5px] font-black uppercase tracking-wider text-[#5c3c24]/80">Cavalos</span>
                       <span className="text-base sm:text-lg font-black text-purple-800 font-mono leading-none mt-1.5">{totalCavalos}</span>
+                    </div>
+
+                    <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/20 rounded-2xl p-3 text-left shadow-md flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-all">
+                      <div className="absolute top-0 left-0 w-full h-0.5 bg-emerald-600" />
+                      <span className="text-[8.5px] font-black uppercase tracking-wider text-[#5c3c24]/80">Carreta</span>
+                      <span className="text-base sm:text-lg font-black text-emerald-800 font-mono leading-none mt-1.5">{totalCarretas}</span>
                     </div>
 
                     <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/20 rounded-2xl p-3 text-left shadow-md flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-all col-span-2 sm:col-span-1">
@@ -3007,14 +3404,32 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                 );
               })()}
 
-              {/* LIST TABLE CONTAINER */}
+               {/* LIST TABLE CONTAINER */}
               <div className="flex-1 overflow-x-auto overflow-y-auto max-h-[38rem] border border-[#5c3c24]/30 rounded-2xl bg-[#faf6f0]/50 shadow-inner">
                 {(() => {
+                  const formattedFilterDate = (() => {
+                    if (!cubagemDateFilter) return '';
+                    const parts = cubagemDateFilter.split('-');
+                    if (parts.length === 3) {
+                      const [year, month, day] = parts;
+                      return `${day}/${month}/${year}`;
+                    }
+                    return cubagemDateFilter;
+                  })();
+
                   const filtered = cubagemData.filter(item => {
                     const search = cubagemSearch.replace(/[\s-]/g, '').toUpperCase();
-                    if (!search) return true;
-                    return item.cavalo.replace(/[\s-]/g, '').toUpperCase().includes(search) ||
+                    const matchesSearch = !search ||
+                           item.cavalo.replace(/[\s-]/g, '').toUpperCase().includes(search) ||
                            item.carreta.replace(/[\s-]/g, '').toUpperCase().includes(search);
+
+                    const matchesCarrier = !cubagemCarrierFilter || 
+                           (item.transportador && item.transportador.trim().toUpperCase() === cubagemCarrierFilter.toUpperCase());
+
+                    const matchesDate = !cubagemDateFilter || 
+                           (item.data && item.data.trim() === formattedFilterDate);
+
+                    return matchesSearch && matchesCarrier && matchesDate;
                   });
 
                   if (filtered.length === 0) {
@@ -3027,6 +3442,30 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     );
                   }
 
+                  // Grouping logic for conjuntos (consecutive entries with identical cavalo plates)
+                  const groupedFiltered: {
+                    id: string;
+                    cavalo: string;
+                    items: CubagemItem[];
+                    inseridoEm: string;
+                  }[] = [];
+
+                  for (const item of filtered) {
+                    if (groupedFiltered.length > 0) {
+                      const lastGroup = groupedFiltered[groupedFiltered.length - 1];
+                      if (lastGroup.cavalo.replace(/[\s-]/g, '').toUpperCase() === item.cavalo.replace(/[\s-]/g, '').toUpperCase()) {
+                        lastGroup.items.push(item);
+                        continue;
+                      }
+                    }
+                    groupedFiltered.push({
+                      id: item.id,
+                      cavalo: item.cavalo,
+                      items: [item],
+                      inseridoEm: item.inseridoEm
+                    });
+                  }
+
                   return (
                     <>
                       {/* Desktop Table View */}
@@ -3034,113 +3473,350 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                         <table className="w-full text-left border-collapse">
                           <thead>
                             <tr className="bg-[#f0dfcc]/50 border-b border-[#5c3c24]/30">
-                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Cavalo (Placa)</th>
-                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Carreta (Placa)</th>
-                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider">Cubagem (M³)</th>
-                              <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider hidden md:table-cell">Registrado Em</th>
-                              {!isReadOnly && <th className="px-5 py-3.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>}
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Mês</th>
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Dia</th>
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Data</th>
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15">Transportador</th>
+                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#ca1a20] uppercase tracking-wider bg-red-100/30 text-center border-r border-[#5c3c24]/15">Cavalo (Placa)</th>
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Carreta (Placa)</th>
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">Nº Pallets</th>
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">PBT (Ton)</th>
+                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#047857] uppercase tracking-wider bg-emerald-100/30 text-center border-r border-[#5c3c24]/15">Cubagem (M³)</th>
+                              {!isReadOnly && <th className="px-1.5 py-2.5 text-[8.5px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>}
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-[#5c3c24]/10 bg-[#fcfaf7]/40">
-                            {filtered.map(item => {
+                          <tbody className="bg-[#fcfaf7]/40">
+                            {groupedFiltered.map(item => {
                               const isEditing = editingCubagemId === item.id;
                               return (
-                                <tr key={item.id} className="hover:bg-[#f0dfcc]/25 transition-colors">
+                                <tr key={item.id} className="hover:bg-[#f0dfcc]/25 transition-colors border-b-[3px] border-[#5c3c24]/50">
                                   {isEditing ? (
                                     <>
-                                      <td className="px-4 py-3">
+                                      {/* Mês Edit */}
+                                      <td className="px-1.5 py-1.5">
+                                        <div className="space-y-1.5">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <input 
+                                              key={sub.id}
+                                              type="text"
+                                              value={sub.mes || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].mes = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              placeholder="Ex: JAN"
+                                              className="w-full max-w-[45px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black outline-none"
+                                            />
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Dia Edit */}
+                                      <td className="px-1.5 py-1.5">
+                                        <div className="space-y-1.5">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <input 
+                                              key={sub.id}
+                                              type="text"
+                                              value={sub.dia || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].dia = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              placeholder="Ex: sexta-feira"
+                                              className="w-full max-w-[75px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black outline-none"
+                                            />
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Data Edit */}
+                                      <td className="px-1.5 py-1.5">
+                                        <div className="space-y-1.5">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <input 
+                                              key={sub.id}
+                                              type="text"
+                                              value={sub.data || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].data = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              placeholder="Ex: 02/01"
+                                              className="w-full max-w-[65px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black outline-none"
+                                            />
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Transportador Edit */}
+                                      <td className="px-1.5 py-1.5 text-center align-middle">
+                                        <input 
+                                          type="text"
+                                          value={editingGroupItems[0]?.transportador || ''}
+                                          onChange={(e) => {
+                                            const updated = editingGroupItems.map(subItem => ({
+                                              ...subItem,
+                                              transportador: e.target.value
+                                            }));
+                                            setEditingGroupItems(updated);
+                                          }}
+                                          placeholder="Ex: COMBOIO"
+                                          className="w-full max-w-[95px] bg-white border-2 border-[#5c3c24]/40 text-[#1c1109] rounded px-1.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#5c3c24]/20 shadow-inner text-center"
+                                        />
+                                      </td>
+                                      {/* Cavalo Edit */}
+                                      <td className="px-3 py-1.5 bg-red-50/10 text-center">
                                         <input 
                                           type="text"
                                           value={editingCavalo}
                                           onChange={(e) => setEditingCavalo(e.target.value)}
-                                          className="w-full max-w-[120px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                          className="w-full max-w-[100px] bg-white border-2 border-[#ca1a20]/40 text-[#1c1109] rounded px-2 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/30 shadow-inner text-center"
                                         />
                                       </td>
-                                      <td className="px-4 py-3">
-                                        <input 
-                                          type="text"
-                                          value={editingCarreta}
-                                          onChange={(e) => setEditingCarreta(e.target.value)}
-                                          className="w-full max-w-[120px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
-                                        />
+                                      {/* Carreta Edit */}
+                                      <td className="px-1.5 py-1.5">
+                                        <div className="space-y-1.5">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <div key={sub.id} className="flex items-center gap-1">
+                                              <span className="text-[8px] font-black uppercase text-[#5c3c24]/60">
+                                                C{idx + 1}:
+                                              </span>
+                                              <input 
+                                                type="text"
+                                                value={sub.carreta}
+                                                onChange={(e) => {
+                                                  const updated = [...editingGroupItems];
+                                                  updated[idx].carreta = e.target.value;
+                                                  setEditingGroupItems(updated);
+                                                }}
+                                                className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black uppercase outline-none"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
                                       </td>
-                                      <td className="px-4 py-3">
-                                        <input 
-                                          type="text"
-                                          value={editingM3}
-                                          onChange={(e) => setEditingM3(e.target.value)}
-                                          className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded-lg px-2.5 py-1 text-xs font-black outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
-                                        />
+                                      {/* Pallets Edit */}
+                                      <td className="px-1.5 py-1.5">
+                                        <div className="space-y-1.5">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <input 
+                                              key={sub.id}
+                                              type="text"
+                                              value={sub.pallets || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].pallets = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              placeholder="Ex: 24"
+                                              className="w-full max-w-[40px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black text-center outline-none"
+                                            />
+                                          ))}
+                                        </div>
                                       </td>
-                                      <td className="px-4 py-3 hidden md:table-cell text-[10px] font-bold text-[#5c3c24]/70">
-                                        Em edição...
+                                      {/* PBT Edit */}
+                                      <td className="px-1.5 py-1.5">
+                                        <div className="space-y-1.5">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <input 
+                                              key={sub.id}
+                                              type="text"
+                                              value={sub.pbt || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].pbt = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              placeholder="Ex: 24"
+                                              className="w-full max-w-[40px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black text-center outline-none"
+                                            />
+                                          ))}
+                                        </div>
                                       </td>
-                                      <td className="px-4 py-3 text-center">
-                                        <div className="flex items-center justify-center gap-1.5">
+                                      {/* Cubagem Edit */}
+                                      <td className="px-3 py-1.5 bg-emerald-50/10 text-center">
+                                        <div className="space-y-1.5 inline-block text-left">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <div key={sub.id} className="flex items-center gap-1">
+                                              <span className="text-[9px] font-black uppercase text-emerald-800">
+                                                C{idx + 1}:
+                                              </span>
+                                              <input 
+                                                type="text"
+                                                value={sub.m3}
+                                                onChange={(e) => {
+                                                  const updated = [...editingGroupItems];
+                                                  updated[idx].m3 = e.target.value;
+                                                  setEditingGroupItems(updated);
+                                                }}
+                                                className="w-full max-w-[70px] bg-white border-2 border-emerald-400/40 text-emerald-900 rounded px-1.5 py-1 text-xs font-black outline-none focus:ring-2 focus:ring-emerald-400/30 shadow-inner"
+                                              />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      <td className="px-2 py-2 text-center">
+                                        <div className="flex items-center justify-center gap-1">
                                           <button 
                                             type="button"
                                             onClick={() => handleSaveEditCubagem(item.id)}
-                                            className="w-8 h-8 flex items-center justify-center bg-gradient-to-b from-[#ca1a20] to-[#800609] hover:from-[#e4252c] hover:to-[#990a0d] text-[#fdefd1] rounded-lg transition-colors shadow-sm cursor-pointer border border-[#ff3e47]/20"
+                                            className="w-7 h-7 flex items-center justify-center bg-gradient-to-b from-[#ca1a20] to-[#800609] hover:from-[#e4252c] hover:to-[#990a0d] text-[#fdefd1] rounded-lg transition-colors shadow-sm cursor-pointer border border-[#ff3e47]/20"
                                             title="Salvar"
                                           >
-                                            <Save size={14} />
+                                            <Save size={12} />
                                           </button>
                                           <button 
                                             type="button"
                                             onClick={handleCancelEditCubagem}
-                                            className="w-8 h-8 flex items-center justify-center bg-gradient-to-b from-[#5c3c24] to-[#3a2517] hover:from-[#734c2f] hover:to-[#4e321e] text-white rounded-lg transition-colors shadow-sm cursor-pointer border border-white/10"
+                                            className="w-7 h-7 flex items-center justify-center bg-gradient-to-b from-[#5c3c24] to-[#3a2517] hover:from-[#734c2f] hover:to-[#4e321e] text-white rounded-lg transition-colors shadow-sm cursor-pointer border border-white/10"
                                             title="Cancelar"
                                           >
-                                            <X size={14} />
+                                            <X size={12} />
                                           </button>
                                         </div>
                                       </td>
                                     </>
                                   ) : (
                                     <>
-                                      <td className="px-5 py-3">
-                                        <LicensePlate plate={item.cavalo} type="cavalo" />
-                                      </td>
-                                      <td className="px-5 py-3">
-                                        <LicensePlate plate={item.carreta} type="carreta" />
-                                      </td>
-                                      <td className="px-5 py-3">
-                                        <div className="inline-flex items-center px-3.5 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-bold font-mono text-xs sm:text-sm shadow-inner">
-                                          {item.m3} M³
+                                      {/* Mês Column */}
+                                      <td className="px-1.5 py-2 font-black text-[10.5px] text-[#1c1109] border-r border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1">
+                                          {item.items.map((sub) => (
+                                            <div key={sub.id} className="h-[28px] flex items-center">
+                                              {sub.mes || '---'}
+                                            </div>
+                                          ))}
                                         </div>
                                       </td>
-                                      <td className="px-5 py-3 hidden md:table-cell text-[10px] font-bold text-[#5c3c24]/80">
-                                        {new Date(item.inseridoEm).toLocaleString('pt-BR', {
-                                          day: '2-digit',
-                                          month: '2-digit',
-                                          year: 'numeric',
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        })}
+                                      {/* Dia Column */}
+                                      <td className="px-1.5 py-2 font-bold text-[10.5px] text-[#1c1109] border-r border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1">
+                                          {item.items.map((sub) => (
+                                            <div key={sub.id} className="h-[28px] flex items-center capitalize">
+                                              {sub.dia || '---'}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Data Column */}
+                                      <td className="px-1.5 py-2 font-bold text-[10.5px] text-[#1c1109] font-mono border-r border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1">
+                                          {item.items.map((sub) => (
+                                            <div key={sub.id} className="h-[28px] flex items-center">
+                                              {sub.data || '---'}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Transportador Column */}
+                                      <td className="px-3 py-2 text-[12px] font-black text-[#1c1109] text-center align-middle border-r border-[#5c3c24]/10">
+                                        <div className="flex items-center justify-center min-h-[28px] h-full uppercase font-sans tracking-wide">
+                                          {item.items[0]?.transportador || '---'}
+                                        </div>
+                                      </td>
+                                      {/* Cavalo Column */}
+                                      <td className="px-3 py-2 bg-red-50/10 border-r border-[#5c3c24]/10 text-center">
+                                        <div className="flex justify-center">
+                                          <LicensePlate plate={item.cavalo} type="cavalo" size="md" />
+                                        </div>
+                                      </td>
+                                      {/* Carreta Column */}
+                                      <td className="px-1.5 py-2 border-r border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1">
+                                          {item.items.map((sub, idx) => (
+                                            <div key={sub.id} className="h-[28px] flex items-center gap-1">
+                                              {item.items.length > 1 && (
+                                                <span className="text-[7.5px] font-black uppercase tracking-wider text-[#5c3c24]/60 bg-[#5c3c24]/10 px-0.5 py-0.2 rounded shrink-0">
+                                                  C{idx + 1}
+                                                </span>
+                                              )}
+                                              <LicensePlate plate={sub.carreta} type="carreta" size="sm" />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Nº Pallets Column */}
+                                      <td className="px-1.5 py-2 text-[10.5px] font-mono font-bold text-center border-r border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1 items-center">
+                                          {item.items.map((sub) => (
+                                            <div key={sub.id} className="h-[28px] flex items-center justify-center">
+                                              <span className="bg-amber-100/60 border border-amber-300/60 rounded px-1.5 py-0.5 text-[#5c3c24]">
+                                                {sub.pallets || '---'}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* PBT Column */}
+                                      <td className="px-1.5 py-2 text-[10.5px] font-mono font-bold text-center border-r border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1 items-center">
+                                          {item.items.map((sub) => (
+                                            <div key={sub.id} className="h-[28px] flex items-center justify-center">
+                                              <span className="bg-stone-100 border border-stone-300 rounded px-1.5 py-0.5 text-stone-700 font-medium">
+                                                {sub.pbt || '---'}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Cubagem Column */}
+                                      <td className="px-3 py-2 bg-emerald-50/10 border-x border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1.5 items-center">
+                                          {item.items.map((sub, idx) => (
+                                            <div key={sub.id} className="h-[28px] flex items-center gap-1">
+                                              {item.items.length > 1 && (
+                                                <span className="text-[7.5px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded font-sans shrink-0">
+                                                  C{idx + 1}
+                                                </span>
+                                              )}
+                                              <div className="inline-flex items-center px-3 py-1 bg-emerald-100 border-2 border-emerald-400 rounded-full text-emerald-900 font-black font-mono text-[13px] shadow-[0_2px_4px_rgba(0,0,0,0.1)] hover:scale-105 transition-transform">
+                                                {sub.m3} M³
+                                              </div>
+                                            </div>
+                                          ))}
+                                          {item.items.length > 1 && (
+                                            <div className="pt-1 mt-1 border-t-2 border-[#5c3c24]/15 flex items-center gap-1.5 w-full justify-center">
+                                              <span className="text-[9px] font-black text-[#8c060a] uppercase tracking-wider font-sans">Total:</span>
+                                              <span className="text-[12px] font-black text-[#8c060a] font-mono bg-amber-100 border-2 border-amber-300 px-2 py-0.5 rounded-lg shadow-sm">
+                                                {item.items.reduce((sum, sub) => sum + (parseFloat(sub.m3) || 0), 0)} M³
+                                              </span>
+                                            </div>
+                                          )}
+                                        </div>
                                       </td>
                                       {!isReadOnly && (
-                                        <td className="px-5 py-3 text-center">
-                                          <div className="flex items-center justify-center gap-2">
+                                        <td className="px-1.5 py-2 text-center">
+                                          <div className="flex items-center justify-center gap-1">
                                             <button 
                                               type="button"
                                               onClick={() => {
                                                 setEditingCubagemId(item.id);
                                                 setEditingCavalo(item.cavalo);
-                                                setEditingCarreta(item.carreta);
-                                                setEditingM3(item.m3);
+                                                setEditingGroupItems(item.items.map(sub => ({ 
+                                                  id: sub.id, 
+                                                  carreta: sub.carreta, 
+                                                  m3: sub.m3,
+                                                  mes: sub.mes || '',
+                                                  dia: sub.dia || '',
+                                                  data: sub.data || '',
+                                                  transportador: sub.transportador || '',
+                                                  pallets: sub.pallets || '',
+                                                  pbt: sub.pbt || ''
+                                                })));
                                               }}
-                                              className="w-8 h-8 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
+                                              className="w-7 h-7 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
                                               title="Editar Registro"
                                             >
-                                              <Edit size={13} />
+                                              <Edit size={12} />
                                             </button>
                                             <button 
                                               type="button"
-                                              onClick={() => handleDeleteCubagem(item.id)}
-                                              className="w-8 h-8 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
+                                              onClick={() => handleDeleteCubagem(item.items.map(sub => sub.id))}
+                                              className="w-7 h-7 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
                                               title="Excluir Registro"
                                             >
-                                              <Trash2 size={13} />
+                                              <Trash2 size={12} />
                                             </button>
                                           </div>
                                         </td>
@@ -3156,7 +3832,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
                       {/* Mobile Card List View - 100% optimized for phone interaction */}
                       <div className="block md:hidden p-3.5 space-y-4">
-                        {filtered.map(item => {
+                        {groupedFiltered.map(item => {
                           const isEditing = editingCubagemId === item.id;
                           return (
                             <div 
@@ -3167,7 +3843,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                 <div className="space-y-4">
                                   <div className="text-xs font-black text-[#8c060a] uppercase tracking-wider border-b border-[#5c3c24]/10 pb-1 flex items-center gap-1.5">
                                     <Edit size={13} />
-                                    <span>Editar Cubagem</span>
+                                    <span>Editar Conjunto</span>
                                   </div>
                                   
                                   <div className="space-y-3">
@@ -3180,24 +3856,124 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                         className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
                                       />
                                     </div>
-                                    <div>
-                                      <label className="text-[9px] font-black text-[#5c3c24] uppercase tracking-wider pl-1">Placa Carreta:</label>
-                                      <input 
-                                        type="text"
-                                        value={editingCarreta}
-                                        onChange={(e) => setEditingCarreta(e.target.value)}
-                                        className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
-                                      />
-                                    </div>
-                                    <div>
-                                      <label className="text-[9px] font-black text-[#5c3c24] uppercase tracking-wider pl-1">Cubagem (M³):</label>
-                                      <input 
-                                        type="text"
-                                        value={editingM3}
-                                        onChange={(e) => setEditingM3(e.target.value)}
-                                        className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
-                                      />
-                                    </div>
+                                    
+                                    {editingGroupItems.map((sub, idx) => (
+                                      <div key={sub.id} className="p-3 bg-[#f0dfcc]/20 border border-[#5c3c24]/20 rounded-xl space-y-2">
+                                        <div className="text-[10px] font-black text-[#5c3c24] uppercase tracking-wider">
+                                          {idx + 1}ª Carreta / Reboque
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-1.5">
+                                          <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Mês:</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.mes || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].mes = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-2 py-1 text-xs font-black outline-none"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Dia:</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.dia || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].dia = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-2 py-1 text-xs font-black outline-none"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Data:</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.data || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].data = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-2 py-1 text-xs font-black outline-none"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div>
+                                          <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Transportador:</label>
+                                          <input 
+                                            type="text"
+                                            value={sub.transportador || ''}
+                                            onChange={(e) => {
+                                              const updated = [...editingGroupItems];
+                                              updated[idx].transportador = e.target.value;
+                                              setEditingGroupItems(updated);
+                                            }}
+                                            className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black uppercase outline-none"
+                                          />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Placa Carreta:</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.carreta}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].carreta = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Cubagem (M³):</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.m3}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].m3 = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black outline-none focus:ring-2 focus:ring-[#ca1a20]/20"
+                                            />
+                                          </div>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Nº Pallets:</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.pallets || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].pallets = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black outline-none"
+                                            />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">PBT (Ton):</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.pbt || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].pbt = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black outline-none"
+                                            />
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
 
                                   <div className="flex gap-2.5 pt-1">
@@ -3229,8 +4005,17 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                         onClick={() => {
                                           setEditingCubagemId(item.id);
                                           setEditingCavalo(item.cavalo);
-                                          setEditingCarreta(item.carreta);
-                                          setEditingM3(item.m3);
+                                          setEditingGroupItems(item.items.map(sub => ({ 
+                                            id: sub.id, 
+                                            carreta: sub.carreta, 
+                                            m3: sub.m3,
+                                            mes: sub.mes || '',
+                                            dia: sub.dia || '',
+                                            data: sub.data || '',
+                                            transportador: sub.transportador || '',
+                                            pallets: sub.pallets || '',
+                                            pbt: sub.pbt || ''
+                                          })));
                                         }}
                                         className="p-2 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
                                         title="Editar Registro"
@@ -3239,7 +4024,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                       </button>
                                       <button 
                                         type="button"
-                                        onClick={() => handleDeleteCubagem(item.id)}
+                                        onClick={() => handleDeleteCubagem(item.items.map(sub => sub.id))}
                                         className="p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
                                         title="Excluir Registro"
                                       >
@@ -3249,36 +4034,89 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                   )}
 
                                   {/* Plate indicators & layout */}
-                                  <div className="flex flex-col gap-2.5 pr-20">
-                                    <div className="flex items-start gap-2 flex-wrap">
-                                      <div className="flex flex-col gap-0.5">
+                                  <div className="flex flex-col gap-2.5 pr-16">
+                                    <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-[#5c3c24]/90 bg-[#faf6f0]/60 p-2 rounded-xl border border-[#5c3c24]/10">
+                                      <div>
+                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Data / Mês</span>
+                                        <span>{item.items[0]?.data || '---'} ({item.items[0]?.mes || '---'})</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Dia da Semana</span>
+                                        <span className="capitalize">{item.items[0]?.dia || '---'}</span>
+                                      </div>
+                                      <div className="col-span-2 border-t border-[#5c3c24]/10 pt-1 mt-1">
+                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Transportador</span>
+                                        <span className="font-extrabold uppercase text-[#ca1a20]">{item.items[0]?.transportador || '---'}</span>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex gap-4">
+                                      <div className="flex flex-col gap-1.5">
                                         <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Cavalo</span>
                                         <LicensePlate plate={item.cavalo} type="cavalo" />
                                       </div>
-                                      <div className="flex flex-col gap-0.5">
-                                        <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Carreta</span>
-                                        <LicensePlate plate={item.carreta} type="carreta" />
+
+                                      <div className="flex flex-col gap-1.5">
+                                        <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Carretas</span>
+                                        <div className="flex flex-wrap gap-2">
+                                          {item.items.map((sub, idx) => (
+                                            <div key={sub.id} className="flex flex-col gap-0.5">
+                                              <LicensePlate plate={sub.carreta} type="carreta" />
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-[#5c3c24]/90 bg-[#f0dfcc]/30 p-2 rounded-xl">
+                                      <div>
+                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Nº Paletes</span>
+                                        <span className="font-mono font-black">{item.items.map(sub => sub.pallets || '---').join(' + ')}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">PBT (TON)</span>
+                                        <span className="font-mono font-black">{item.items.map(sub => sub.pbt || '---').join(' + ')}</span>
                                       </div>
                                     </div>
                                   </div>
 
                                   {/* Volume showcase & registered time info */}
-                                  <div className="flex items-center justify-between gap-4 pt-2.5 border-t border-[#5c3c24]/10">
-                                    <div className="flex items-center gap-1 text-[9px] text-[#5c3c24]/80 font-mono font-bold">
-                                      <Clock size={11} className="text-[#ca1a20]" />
-                                      <span>
-                                        {new Date(item.inseridoEm).toLocaleString('pt-BR', {
-                                          day: '2-digit',
-                                          month: '2-digit',
-                                          hour: '2-digit',
-                                          minute: '2-digit'
-                                        })}
-                                      </span>
+                                  <div className="flex flex-col gap-2 pt-2.5 border-t border-[#5c3c24]/10">
+                                    <div className="flex items-center justify-between gap-4">
+                                      <div className="flex items-center gap-1 text-[9px] text-[#5c3c24]/80 font-mono font-bold">
+                                        <Clock size={11} className="text-[#ca1a20]" />
+                                        <span>
+                                          {new Date(item.inseridoEm).toLocaleString('pt-BR', {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                            hour: '2-digit',
+                                            minute: '2-digit'
+                                          })}
+                                        </span>
+                                      </div>
+
+                                      <div className="flex flex-col items-end gap-1 shrink-0">
+                                        {item.items.map((sub, idx) => (
+                                          <div key={sub.id} className="flex items-center gap-1.5">
+                                            {item.items.length > 1 && (
+                                              <span className="text-[7px] font-black text-[#5c3c24]/50">Carreta {idx+1}:</span>
+                                            )}
+                                            <div className="inline-flex items-center px-2 py-0.5 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-bold font-mono text-[10px] shadow-inner">
+                                              {sub.m3} M³
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
                                     </div>
 
-                                    <div className="inline-flex items-center px-3.5 py-1 bg-emerald-100 border border-emerald-300 rounded-full text-emerald-800 font-black font-mono text-xs shadow-inner shrink-0">
-                                      {item.m3} M³
-                                    </div>
+                                    {item.items.length > 1 && (
+                                      <div className="flex items-center justify-between pt-1 border-t border-[#5c3c24]/5">
+                                        <span className="text-[8px] font-black text-[#8c060a] uppercase tracking-wider">Cubagem Total do Conjunto:</span>
+                                        <span className="text-xs font-black text-[#8c060a] font-mono bg-amber-50 border border-amber-200 px-3 py-0.5 rounded-full shadow-sm">
+                                          {item.items.reduce((sum, sub) => sum + (parseFloat(sub.m3) || 0), 0)} M³
+                                        </span>
+                                      </div>
+                                    )}
                                   </div>
                                 </>
                               )}
