@@ -3291,7 +3291,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                       onChange={(e) => setCubagemCarrierFilter(e.target.value)}
                       className="w-full sm:w-auto bg-white border border-[#5c3c24]/30 text-[#1c1109] font-bold text-[10px] rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] uppercase cursor-pointer shadow-sm"
                     >
-                      <option value="">[ TODOS ]</option>
+                      <option value="">TODOS</option>
                       {uniqueCarriers.map(carrier => (
                         <option key={carrier} value={carrier}>{carrier}</option>
                       ))}
