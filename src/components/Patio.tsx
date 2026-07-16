@@ -407,13 +407,16 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     transportador?: string;
     pallets?: string;
     pbt?: string;
+    modeloCarreta?: string;
   }
 
   // Cubagem states
   const [cubagemData, setCubagemData] = useState<CubagemItem[]>([]);
   const [cubagemSearch, setCubagemSearch] = useState('');
   const [cubagemCarrierFilter, setCubagemCarrierFilter] = useState('');
+  const [cubagemCarrierSearch, setCubagemCarrierSearch] = useState('');
   const [cubagemDateFilter, setCubagemDateFilter] = useState('');
+  const [cubagemVehicleTypeFilter, setCubagemVehicleTypeFilter] = useState('');
   const [cubagemPdfFile, setCubagemPdfFile] = useState<File | null>(null);
   const [isProcessingCubagem, setIsProcessingCubagem] = useState(false);
   const [cubagemStatusMsg, setCubagemStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -427,6 +430,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     transportador?: string;
     pallets?: string;
     pbt?: string;
+    modeloCarreta?: string;
   }[]>([]);
 
   // Manual input states
@@ -439,6 +443,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   const [manualTransportador, setManualTransportador] = useState('');
   const [manualPallets, setManualPallets] = useState('');
   const [manualPbt, setManualPbt] = useState('');
+  const [manualModeloCarreta, setManualModeloCarreta] = useState('');
   const [cubagemPasteText, setCubagemPasteText] = useState('');
   const [parsedPreviewItems, setParsedPreviewItems] = useState<{ 
     cavalo: string; 
@@ -451,6 +456,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     transportador?: string;
     pallets?: string;
     pbt?: string;
+    modeloCarreta?: string;
   }[]>([]);
   const [isShowingPreview, setIsShowingPreview] = useState(false);
   const [lastImportedIds, setLastImportedIds] = useState<string[]>([]);
@@ -743,6 +749,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         transportador: manualTransportador.trim(),
         pallets: manualPallets.trim(),
         pbt: manualPbt.trim(),
+        modeloCarreta: manualModeloCarreta.trim(),
         inseridoEm: new Date().toISOString()
       });
       setManualCavalo('');
@@ -754,6 +761,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       setManualTransportador('');
       setManualPallets('');
       setManualPbt('');
+      setManualModeloCarreta('');
       setCubagemStatusMsg({ type: 'success', text: 'Cubagem adicionada com sucesso!' });
       setTimeout(() => setCubagemStatusMsg(null), 3000);
     } catch (error) {
@@ -813,6 +821,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         updates[`patio/cubagem/${sub.id}/transportador`] = sub.transportador?.trim() || '';
         updates[`patio/cubagem/${sub.id}/pallets`] = sub.pallets?.trim() || '';
         updates[`patio/cubagem/${sub.id}/pbt`] = sub.pbt?.trim() || '';
+        updates[`patio/cubagem/${sub.id}/modeloCarreta`] = sub.modeloCarreta?.trim() || '';
       }
       await update(ref(db), updates);
       setEditingCubagemId(null);
@@ -980,6 +989,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       transportador?: string;
       pallets?: string;
       pbt?: string;
+      modeloCarreta?: string;
     }[] = [];
     const processedCarretasInBatch = new Set<string>();
     let skippedCount = 0;
@@ -1012,6 +1022,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     let diaColIndex = -1;
     let dataColIndex = -1;
     let transportadorColIndex = -1;
+    let modeloCarretaColIndex = -1;
 
     for (let i = 0; i < Math.min(10, lines.length); i++) {
       const line = lines[i].trim();
@@ -1029,8 +1040,9 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       const hasDia = finalWordsLower.some(w => w === 'dia');
       const hasData = finalWordsLower.some(w => w === 'data');
       const hasTransportador = finalWordsLower.some(w => w.includes('transportador') || w.includes('transp'));
+      const hasModeloCarreta = finalWordsLower.some(w => w.replace(/\s+/g, ' ').includes('modelo carreta'));
 
-      if (hasCavalo || hasCarreta || hasM3 || hasPallets || hasPbt || hasMes || hasDia || hasData || hasTransportador) {
+      if (hasCavalo || hasCarreta || hasM3 || hasPallets || hasPbt || hasMes || hasDia || hasData || hasTransportador || hasModeloCarreta) {
         for (let j = 0; j < finalWordsLower.length; j++) {
           const w = finalWordsLower[j];
           if (!w) continue;
@@ -1049,6 +1061,8 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
           if (w.includes('cavalo') || (w.includes('placa') && !w.includes('carreta') && !w.includes('reboque'))) {
             cavaloColIndex = j;
+          } else if (w.replace(/\s+/g, ' ').includes('modelo carreta')) {
+            modeloCarretaColIndex = j;
           } else if (w.includes('carreta') || w.includes('reboque') || w.includes('semi')) {
             carretaColIndex = j;
           } else if (w.includes('m³') || w.includes('m3') || w.includes('cubagem') || w.includes('vol') || w.includes('volume')) {
@@ -1074,7 +1088,9 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     // Set up forbidden indices relative to mesColIndex or 0 as offset
     const offset = mesColIndex !== -1 ? mesColIndex : 0;
     const forbiddenIndices = [
+      offset,      // Column B (Mês)
       offset + 1,  // Column C (Origem)
+      offset + 2,  // Column D (Dia)
       offset + 4,  // Column F (Contato Whats)
       offset + 5,  // Column G (Hora Liberado)
       offset + 6,  // Column H (Status)
@@ -1170,6 +1186,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       let transportadorValue = '';
       let palletsValue = '';
       let pbtValue = '';
+      let modeloCarretaValue = '';
 
       if (mesColIndex !== -1 && mesColIndex < finalWords.length && !forbiddenIndices.includes(mesColIndex)) {
         mesValue = finalWords[mesColIndex].trim();
@@ -1188,6 +1205,9 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       }
       if (pbtColIndex !== -1 && pbtColIndex < finalWords.length && !forbiddenIndices.includes(pbtColIndex)) {
         pbtValue = finalWords[pbtColIndex].trim();
+      }
+      if (modeloCarretaColIndex !== -1 && modeloCarretaColIndex < finalWords.length && !forbiddenIndices.includes(modeloCarretaColIndex)) {
+        modeloCarretaValue = finalWords[modeloCarretaColIndex].trim();
       }
 
       // Requer pelo menos 1 placa (carreta) e um valor de cubagem não-vazio
@@ -1209,7 +1229,8 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
             data: dataValue,
             transportador: transportadorValue,
             pallets: palletsValue,
-            pbt: pbtValue
+            pbt: pbtValue,
+            modeloCarreta: modeloCarretaValue
           });
         } else {
           previewList.push({ 
@@ -1222,7 +1243,8 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
             data: dataValue,
             transportador: transportadorValue,
             pallets: palletsValue,
-            pbt: pbtValue
+            pbt: pbtValue,
+            modeloCarreta: modeloCarretaValue
           });
           processedCarretasInBatch.add(cleanCarreta);
         }
@@ -1272,6 +1294,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
             transportador: item.transportador || '',
             pallets: item.pallets || '',
             pbt: item.pbt || '',
+            modeloCarreta: item.modeloCarreta || '',
             inseridoEm: new Date().toISOString()
           });
           newlyAddedIds.push(newId);
@@ -1509,14 +1532,18 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         let colTermo = -1;
         let colTransportador = -1;
         let headerRowIdx = -1;
+        const potentialHeaderKeywords = ['CAVALO', 'PLACA', 'DESTINO', 'CIDADE', 'FILIAL', 'ORIGEM', 'TRANSPORTADOR', 'TRANSP', 'MÊS', 'MODELO', 'CARRETA', 'PALLETS', 'PBT', 'VOL'];
 
         for (let r = 0; r < Math.min(rows.length, 5); r++) {
           const cells = rows[r].map(cell => cell.trim().toUpperCase());
-          const hasCavaloHeader = cells.some(c => c.includes('CAVALO') || c === 'PLACA' || c.includes('VEICULO') || c.includes('VEÍCULO') || c.includes('PLACA_CV') || c === 'TRUCK');
-          const hasDestinoHeader = cells.some(c => c.includes('DESTINO') || c.includes('CIDADE') || c.includes('FILIAL') || c === 'DEST');
-          const hasOrigemHeader = cells.some(c => c.includes('ORIGEM'));
-          const hasTransportadorHeader = cells.some(c => c.includes('TRANSPORTADOR') || c === 'TRANSP');
-          if (hasCavaloHeader || hasDestinoHeader || hasOrigemHeader || hasTransportadorHeader) {
+          let keywordCount = 0;
+          for (const cell of cells) {
+            if (potentialHeaderKeywords.some(kw => cell.includes(kw))) {
+              keywordCount++;
+            }
+          }
+          // Only treat as header if we find at least 3 recognizable keywords
+          if (keywordCount >= 3) {
             headerRowIdx = r;
             break;
           }
@@ -1885,6 +1912,17 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     );
     return dateB.getTime() - dateA.getTime();
   }) as string[];
+
+  const uniqueVehicleTypes = Array.from(
+    new Set(
+      cubagemData
+        .map(item => {
+          const raw = item.modeloCarreta?.toUpperCase() || '';
+          return raw.replace(/RODOTREM\s*|RODO\s*TREM\s*|RODOREM\s*/g, '').trim();
+        })
+        .filter(Boolean)
+    )
+  ).sort() as string[];
 
   const filteredData = safeData.filter(item => {
     const matchesSearch = (item?.cavalo && item.cavalo.toLowerCase().includes(searchTerm.toLowerCase())) || 
@@ -2984,27 +3022,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                         />
                       </div>
 
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Mês:</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: JAN"
-                            value={manualMes}
-                            onChange={(e) => setManualMes(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
-                          />
-                        </div>
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Dia:</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: sexta-feira"
-                            value={manualDia}
-                            onChange={(e) => setManualDia(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
-                          />
-                        </div>
+                      <div className="grid grid-cols-1 gap-2">
                         <div className="flex flex-col gap-1.5">
                           <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Data:</label>
                           <input 
@@ -3024,6 +3042,17 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                           placeholder="Ex: COMBOIO"
                           value={manualTransportador}
                           onChange={(e) => setManualTransportador(e.target.value)}
+                          className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                        />
+                      </div>
+
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Modelo Carreta:</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ex: BAÚ"
+                          value={manualModeloCarreta}
+                          onChange={(e) => setManualModeloCarreta(e.target.value)}
                           className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
                         />
                       </div>
@@ -3161,12 +3190,11 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                               )}
                             </div>
                           </div>
-                          {(item.mes || item.dia || item.data || item.transportador || item.pallets || item.pbt) && (
+                          {(item.data || item.transportador || item.pallets || item.pbt || item.modeloCarreta) && (
                             <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-[9px] text-[#5c3c24]/80 uppercase font-sans font-bold pl-5">
-                              {item.mes && <span>Mês: <span className="text-[#311f14]">{item.mes}</span></span>}
-                              {item.dia && <span>Dia: <span className="text-[#311f14] capitalize">{item.dia}</span></span>}
                               {item.data && <span>Data: <span className="text-[#311f14]">{item.data}</span></span>}
                               {item.transportador && <span>Transp: <span className="text-[#311f14]">{item.transportador}</span></span>}
+                              {item.modeloCarreta && <span>Mod: <span className="text-[#311f14]">{item.modeloCarreta.toUpperCase().replace(/RODOTREM\s*|RODO\s*TREM\s*|RODOREM\s*/g, '').trim()}</span></span>}
                               {item.pallets && <span>Pallets: <span className="text-[#311f14]">{item.pallets}</span></span>}
                               {item.pbt && <span>PBT: <span className="text-[#311f14]">{item.pbt} TON</span></span>}
                             </div>
@@ -3285,16 +3313,31 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                 <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                   {/* Transportador Filter Selector */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-[140px]">
-                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap">Transportador:</span>
+                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap">Pesquisar Transportadora:</span>
+                    <input
+                      type="text"
+                      value={cubagemCarrierSearch}
+                      onChange={(e) => setCubagemCarrierSearch(e.target.value)}
+                      placeholder="Buscar..."
+                      className="w-full sm:w-[120px] bg-white border border-[#5c3c24]/30 text-[#1c1109] placeholder-[#5c3c24]/40 font-bold text-[10px] rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] uppercase shadow-sm"
+                    />
+                    
+                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap sm:ml-2">Transportador:</span>
                     <select
                       value={cubagemCarrierFilter}
                       onChange={(e) => setCubagemCarrierFilter(e.target.value)}
                       className="w-full sm:w-auto bg-white border border-[#5c3c24]/30 text-[#1c1109] font-bold text-[10px] rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] uppercase cursor-pointer shadow-sm"
                     >
                       <option value="">TODOS</option>
-                      {uniqueCarriers.map(carrier => (
-                        <option key={carrier} value={carrier}>{carrier}</option>
-                      ))}
+                      {uniqueCarriers
+                        .filter(carrier => {
+                          const matchesSearch = carrier.toLowerCase().includes(cubagemCarrierSearch.toLowerCase());
+                          const isSelected = carrier.toUpperCase() === cubagemCarrierFilter.toUpperCase();
+                          return matchesSearch || isSelected;
+                        })
+                        .map(carrier => (
+                          <option key={carrier} value={carrier}>{carrier}</option>
+                        ))}
                     </select>
                   </div>
 
@@ -3309,13 +3352,30 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     />
                   </div>
 
+                  {/* Tipo de Veículo Filter Selector */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-[120px]">
+                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap">Tipo:</span>
+                    <select
+                      value={cubagemVehicleTypeFilter}
+                      onChange={(e) => setCubagemVehicleTypeFilter(e.target.value)}
+                      className="w-full sm:w-auto bg-white border border-[#5c3c24]/30 text-[#1c1109] font-bold text-[10px] rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] uppercase cursor-pointer shadow-sm"
+                    >
+                      <option value="">TODOS</option>
+                      {uniqueVehicleTypes.map(type => (
+                        <option key={type} value={type}>{type}</option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Clear Filters Button (Only shown if any filter is active) */}
-                  {(cubagemCarrierFilter || cubagemDateFilter) && (
+                  {(cubagemCarrierFilter || cubagemDateFilter || cubagemCarrierSearch || cubagemVehicleTypeFilter) && (
                     <button
                       type="button"
                       onClick={() => {
                         setCubagemCarrierFilter('');
+                        setCubagemCarrierSearch('');
                         setCubagemDateFilter('');
+                        setCubagemVehicleTypeFilter('');
                       }}
                       className="text-[9px] font-black text-rose-800 hover:text-white bg-rose-100 hover:bg-rose-700 border border-rose-300 rounded-xl px-3 py-1.5 uppercase tracking-wider transition-all cursor-pointer shadow-sm sm:ml-auto"
                     >
@@ -3352,23 +3412,64 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                   return matchesSearch && matchesCarrier && matchesDate;
                 });
 
-                const uniquePlatesSet = new Set<string>();
-                filteredItems.forEach(item => {
-                  if (item.carreta) {
-                    const cleanCarreta = item.carreta.replace(/[\s-]/g, '').toUpperCase();
-                    if (cleanCarreta) uniquePlatesSet.add(cleanCarreta);
+                // Group consecutive entries with identical cavalo plates to accurately represent vehicles
+                const groupedItemsForMetrics: {
+                  id: string;
+                  cavalo: string;
+                  items: CubagemItem[];
+                  inseridoEm: string;
+                }[] = [];
+
+                for (const item of filteredItems) {
+                  if (groupedItemsForMetrics.length > 0) {
+                    const lastGroup = groupedItemsForMetrics[groupedItemsForMetrics.length - 1];
+                    if (lastGroup.cavalo.replace(/[\s-]/g, '').toUpperCase() === item.cavalo.replace(/[\s-]/g, '').toUpperCase()) {
+                      lastGroup.items.push(item);
+                      continue;
+                    }
                   }
-                  if (item.cavalo && item.cavalo !== '---') {
-                    const cleanCavalo = item.cavalo.replace(/[\s-]/g, '').toUpperCase();
+                  groupedItemsForMetrics.push({
+                    id: item.id,
+                    cavalo: item.cavalo,
+                    items: [item],
+                    inseridoEm: item.inseridoEm
+                  });
+                }
+
+                // Filter groups by vehicle type (Rodotrem has >= 2 carretas, Baú has 1 carreta)
+                const finalGroupedMetrics = groupedItemsForMetrics.filter(group => {
+                  if (cubagemVehicleTypeFilter) {
+                    return group.items.some(item => {
+                      const raw = item.modeloCarreta?.toUpperCase() || '';
+                      const stripped = raw.replace(/RODOTREM\s*|RODO\s*TREM\s*|RODOREM\s*/g, '').trim();
+                      return stripped === cubagemVehicleTypeFilter;
+                    });
+                  }
+                  return true;
+                });
+
+                const uniquePlatesSet = new Set<string>();
+                finalGroupedMetrics.forEach(group => {
+                  if (group.cavalo && group.cavalo !== '---') {
+                    const cleanCavalo = group.cavalo.replace(/[\s-]/g, '').toUpperCase();
                     if (cleanCavalo) uniquePlatesSet.add(cleanCavalo);
                   }
+                  group.items.forEach(item => {
+                    if (item.carreta) {
+                      const cleanCarreta = item.carreta.replace(/[\s-]/g, '').toUpperCase();
+                      if (cleanCarreta) uniquePlatesSet.add(cleanCarreta);
+                    }
+                  });
                 });
+
                 const totalPlacasUnicas = uniquePlatesSet.size;
-                const totalCarretas = filteredItems.length;
-                const totalCavalos = filteredItems.filter(item => item.cavalo && item.cavalo !== '---').length;
-                const totalVolume = filteredItems.reduce((acc, item) => {
-                  const val = parseFloat(item.m3.replace(',', '.'));
-                  return acc + (isNaN(val) ? 0 : val);
+                const totalCavalos = finalGroupedMetrics.filter(group => group.cavalo && group.cavalo !== '---').length;
+                const totalCarretas = finalGroupedMetrics.reduce((acc, group) => acc + group.items.length, 0);
+                const totalVolume = finalGroupedMetrics.reduce((acc, group) => {
+                  return acc + group.items.reduce((sum, item) => {
+                    const val = parseFloat(item.m3.replace(',', '.'));
+                    return sum + (isNaN(val) ? 0 : val);
+                  }, 0);
                 }, 0);
 
                 return (
@@ -3388,7 +3489,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
                     <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/20 rounded-2xl p-3 text-left shadow-md flex flex-col justify-between relative overflow-hidden group hover:shadow-lg transition-all">
                       <div className="absolute top-0 left-0 w-full h-0.5 bg-emerald-600" />
-                      <span className="text-[8.5px] font-black uppercase tracking-wider text-[#5c3c24]/80">Carreta</span>
+                      <span className="text-[8.5px] font-black uppercase tracking-wider text-[#5c3c24]/80">Carretas</span>
                       <span className="text-base sm:text-lg font-black text-emerald-800 font-mono leading-none mt-1.5">{totalCarretas}</span>
                     </div>
 
@@ -3443,7 +3544,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                   }
 
                   // Grouping logic for conjuntos (consecutive entries with identical cavalo plates)
-                  const groupedFiltered: {
+                  const rawGrouped: {
                     id: string;
                     cavalo: string;
                     items: CubagemItem[];
@@ -3451,14 +3552,14 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                   }[] = [];
 
                   for (const item of filtered) {
-                    if (groupedFiltered.length > 0) {
-                      const lastGroup = groupedFiltered[groupedFiltered.length - 1];
+                    if (rawGrouped.length > 0) {
+                      const lastGroup = rawGrouped[rawGrouped.length - 1];
                       if (lastGroup.cavalo.replace(/[\s-]/g, '').toUpperCase() === item.cavalo.replace(/[\s-]/g, '').toUpperCase()) {
                         lastGroup.items.push(item);
                         continue;
                       }
                     }
-                    groupedFiltered.push({
+                    rawGrouped.push({
                       id: item.id,
                       cavalo: item.cavalo,
                       items: [item],
@@ -3466,19 +3567,40 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     });
                   }
 
+                  // Filter grouped conjuntos by vehicle type (RODOTREM >= 2 carretas, BAU == 1 carreta)
+                  const groupedFiltered = rawGrouped.filter(group => {
+                    if (cubagemVehicleTypeFilter) {
+                      return group.items.some(item => {
+                        const raw = item.modeloCarreta?.toUpperCase() || '';
+                        const stripped = raw.replace(/RODOTREM\s*|RODO\s*TREM\s*|RODOREM\s*/g, '').trim();
+                        return stripped === cubagemVehicleTypeFilter;
+                      });
+                    }
+                    return true;
+                  });
+
+                  if (groupedFiltered.length === 0) {
+                    return (
+                      <div className="flex flex-col items-center justify-center p-14 text-center text-[#5c3c24]/60">
+                        <Database size={36} className="stroke-[1.5] mb-2.5 opacity-40 animate-pulse text-[#ca1a20]" />
+                        <span className="text-xs font-black uppercase tracking-widest text-[#311f14]">Nenhum veículo cubado com este filtro</span>
+                        <p className="text-[9px] text-[#5c3c24]/80 uppercase tracking-widest mt-1">Selecione outra opção ou limpe os filtros para visualizar</p>
+                      </div>
+                    );
+                  }
+
                   return (
                     <>
                       {/* Desktop Table View */}
                       <div className="hidden md:block">
                         <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="bg-[#f0dfcc]/50 border-b border-[#5c3c24]/30">
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Mês</th>
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Dia</th>
+                          <thead className="sticky top-0 z-10 bg-[#f0dfcc] shadow-sm">
+                            <tr className="border-b border-[#5c3c24]/30">
                               <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Data</th>
                               <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15">Transportador</th>
-                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#ca1a20] uppercase tracking-wider bg-red-100/30 text-center border-r border-[#5c3c24]/15">Cavalo (Placa)</th>
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Carreta (Placa)</th>
+                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#ca1a20] uppercase tracking-wider bg-red-100/30 text-center border-r border-[#5c3c24]/15">CAVALO(S)</th>
+                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15">CARRETA(S)</th>
+                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">Modelo Carreta</th>
                               <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">Nº Pallets</th>
                               <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">PBT (Ton)</th>
                               <th className="px-4 py-2.5 text-[10.5px] font-black text-[#047857] uppercase tracking-wider bg-emerald-100/30 text-center border-r border-[#5c3c24]/15">Cubagem (M³)</th>
@@ -3492,44 +3614,6 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                 <tr key={item.id} className="hover:bg-[#f0dfcc]/25 transition-colors border-b-[3px] border-[#5c3c24]/50">
                                   {isEditing ? (
                                     <>
-                                      {/* Mês Edit */}
-                                      <td className="px-1.5 py-1.5">
-                                        <div className="space-y-1.5">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <input 
-                                              key={sub.id}
-                                              type="text"
-                                              value={sub.mes || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].mes = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              placeholder="Ex: JAN"
-                                              className="w-full max-w-[45px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black outline-none"
-                                            />
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Dia Edit */}
-                                      <td className="px-1.5 py-1.5">
-                                        <div className="space-y-1.5">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <input 
-                                              key={sub.id}
-                                              type="text"
-                                              value={sub.dia || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].dia = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              placeholder="Ex: sexta-feira"
-                                              className="w-full max-w-[75px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black outline-none"
-                                            />
-                                          ))}
-                                        </div>
-                                      </td>
                                       {/* Data Edit */}
                                       <td className="px-1.5 py-1.5">
                                         <div className="space-y-1.5">
@@ -3593,6 +3677,25 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                                 className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black uppercase outline-none"
                                               />
                                             </div>
+                                          ))}
+                                        </div>
+                                      </td>
+                                      {/* Modelo Carreta Edit */}
+                                      <td className="px-1.5 py-1.5">
+                                        <div className="space-y-1.5">
+                                          {editingGroupItems.map((sub, idx) => (
+                                            <input 
+                                              key={sub.id}
+                                              type="text"
+                                              value={sub.modeloCarreta || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].modeloCarreta = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              placeholder="Ex: BAÚ"
+                                              className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black text-center outline-none"
+                                            />
                                           ))}
                                         </div>
                                       </td>
@@ -3679,34 +3782,10 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                     </>
                                   ) : (
                                     <>
-                                      {/* Mês Column */}
-                                      <td className="px-1.5 py-2 font-black text-[10.5px] text-[#1c1109] border-r border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1">
-                                          {item.items.map((sub) => (
-                                            <div key={sub.id} className="h-[28px] flex items-center">
-                                              {sub.mes || '---'}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Dia Column */}
-                                      <td className="px-1.5 py-2 font-bold text-[10.5px] text-[#1c1109] border-r border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1">
-                                          {item.items.map((sub) => (
-                                            <div key={sub.id} className="h-[28px] flex items-center capitalize">
-                                              {sub.dia || '---'}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
                                       {/* Data Column */}
-                                      <td className="px-1.5 py-2 font-bold text-[10.5px] text-[#1c1109] font-mono border-r border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1">
-                                          {item.items.map((sub) => (
-                                            <div key={sub.id} className="h-[28px] flex items-center">
-                                              {sub.data || '---'}
-                                            </div>
-                                          ))}
+                                      <td className="px-1.5 py-2 font-bold text-[11px] text-[#1c1109] font-mono text-center align-middle border-r border-[#5c3c24]/10">
+                                        <div className="flex items-center justify-center min-h-[28px] h-full uppercase tracking-wide">
+                                          {item.items[0]?.data || '---'}
                                         </div>
                                       </td>
                                       {/* Transportador Column */}
@@ -3734,6 +3813,25 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                               <LicensePlate plate={sub.carreta} type="carreta" size="sm" />
                                             </div>
                                           ))}
+                                        </div>
+                                      </td>
+                                      {/* Modelo Carreta Column */}
+                                      <td className="px-3 py-2 text-[12px] font-black text-[#1c1109] text-center align-middle border-r border-[#5c3c24]/10">
+                                        <div className="flex flex-col gap-1 items-center justify-center min-h-[28px] h-full uppercase font-sans tracking-wide">
+                                          {item.items.map((sub, idx) => {
+                                            const rawModel = (sub.modeloCarreta || '---').toUpperCase();
+                                            const formattedModel = rawModel.replace(/RODOTREM\s*|RODO\s*TREM\s*|RODOREM\s*/g, '').trim() || '---';
+                                            return (
+                                              <div key={sub.id} className="h-[28px] w-full flex items-center justify-center relative">
+                                                {item.items.length > 1 && (
+                                                  <span className="text-[7.5px] font-black uppercase tracking-wider text-[#5c3c24]/60 bg-[#5c3c24]/10 px-0.5 py-0.2 rounded shrink-0 absolute left-0">
+                                                    C{idx + 1}
+                                                  </span>
+                                                )}
+                                                <span>{formattedModel}</span>
+                                              </div>
+                                            );
+                                          })}
                                         </div>
                                       </td>
                                       {/* Nº Pallets Column */}
@@ -3802,7 +3900,8 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                                   data: sub.data || '',
                                                   transportador: sub.transportador || '',
                                                   pallets: sub.pallets || '',
-                                                  pbt: sub.pbt || ''
+                                                  pbt: sub.pbt || '',
+                                                  modeloCarreta: sub.modeloCarreta || ''
                                                 })));
                                               }}
                                               className="w-7 h-7 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
@@ -3862,33 +3961,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                         <div className="text-[10px] font-black text-[#5c3c24] uppercase tracking-wider">
                                           {idx + 1}ª Carreta / Reboque
                                         </div>
-                                        <div className="grid grid-cols-3 gap-1.5">
-                                          <div>
-                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Mês:</label>
-                                            <input 
-                                              type="text"
-                                              value={sub.mes || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].mes = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-2 py-1 text-xs font-black outline-none"
-                                            />
-                                          </div>
-                                          <div>
-                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Dia:</label>
-                                            <input 
-                                              type="text"
-                                              value={sub.dia || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].dia = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-2 py-1 text-xs font-black outline-none"
-                                            />
-                                          </div>
+                                        <div className="grid grid-cols-1 gap-1.5">
                                           <div>
                                             <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Data:</label>
                                             <input 
@@ -3959,6 +4032,19 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                             />
                                           </div>
                                           <div>
+                                            <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">Modelo Carreta:</label>
+                                            <input 
+                                              type="text"
+                                              value={sub.modeloCarreta || ''}
+                                              onChange={(e) => {
+                                                const updated = [...editingGroupItems];
+                                                updated[idx].modeloCarreta = e.target.value;
+                                                setEditingGroupItems(updated);
+                                              }}
+                                              className="w-full bg-white border-2 border-[#5c3c24]/30 text-[#1c1109] rounded-xl px-3 py-2 text-xs font-black outline-none"
+                                            />
+                                          </div>
+                                          <div>
                                             <label className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider pl-1">PBT (Ton):</label>
                                             <input 
                                               type="text"
@@ -4014,7 +4100,8 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                             data: sub.data || '',
                                             transportador: sub.transportador || '',
                                             pallets: sub.pallets || '',
-                                            pbt: sub.pbt || ''
+                                            pbt: sub.pbt || '',
+                                            modeloCarreta: sub.modeloCarreta || ''
                                           })));
                                         }}
                                         className="p-2 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
@@ -4035,16 +4122,12 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
                                   {/* Plate indicators & layout */}
                                   <div className="flex flex-col gap-2.5 pr-16">
-                                    <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-[#5c3c24]/90 bg-[#faf6f0]/60 p-2 rounded-xl border border-[#5c3c24]/10">
+                                    <div className="grid grid-cols-1 gap-2 text-[10px] font-bold text-[#5c3c24]/90 bg-[#faf6f0]/60 p-2 rounded-xl border border-[#5c3c24]/10">
                                       <div>
-                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Data / Mês</span>
-                                        <span>{item.items[0]?.data || '---'} ({item.items[0]?.mes || '---'})</span>
+                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Data</span>
+                                        <span>{item.items[0]?.data || '---'}</span>
                                       </div>
-                                      <div>
-                                        <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Dia da Semana</span>
-                                        <span className="capitalize">{item.items[0]?.dia || '---'}</span>
-                                      </div>
-                                      <div className="col-span-2 border-t border-[#5c3c24]/10 pt-1 mt-1">
+                                      <div className="border-t border-[#5c3c24]/10 pt-1 mt-1">
                                         <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Transportador</span>
                                         <span className="font-extrabold uppercase text-[#ca1a20]">{item.items[0]?.transportador || '---'}</span>
                                       </div>
@@ -4066,6 +4149,13 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                           ))}
                                         </div>
                                       </div>
+                                    </div>
+
+                                    <div className="bg-[#f0dfcc]/30 p-2 rounded-xl mb-2">
+                                      <span className="text-[6.5px] font-black text-[#5c3c24]/50 uppercase tracking-widest block">Modelo Carreta</span>
+                                      <span className="font-bold text-[10px] text-[#5c3c24]">
+                                        {item.items.map(sub => (sub.modeloCarreta || '---').toUpperCase().replace(/RODOTREM\s*|RODO\s*TREM\s*|RODOREM\s*/g, '').trim() || '---').join(' + ')}
+                                      </span>
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2 text-[10px] font-bold text-[#5c3c24]/90 bg-[#f0dfcc]/30 p-2 rounded-xl">
