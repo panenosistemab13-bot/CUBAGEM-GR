@@ -1532,18 +1532,14 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         let colTermo = -1;
         let colTransportador = -1;
         let headerRowIdx = -1;
-        const potentialHeaderKeywords = ['CAVALO', 'PLACA', 'DESTINO', 'CIDADE', 'FILIAL', 'ORIGEM', 'TRANSPORTADOR', 'TRANSP', 'MÊS', 'MODELO', 'CARRETA', 'PALLETS', 'PBT', 'VOL'];
 
         for (let r = 0; r < Math.min(rows.length, 5); r++) {
           const cells = rows[r].map(cell => cell.trim().toUpperCase());
-          let keywordCount = 0;
-          for (const cell of cells) {
-            if (potentialHeaderKeywords.some(kw => cell.includes(kw))) {
-              keywordCount++;
-            }
-          }
-          // Only treat as header if we find at least 3 recognizable keywords
-          if (keywordCount >= 3) {
+          const hasCavaloHeader = cells.some(c => c.includes('CAVALO') || c === 'PLACA' || c.includes('VEICULO') || c.includes('VEÍCULO') || c.includes('PLACA_CV') || c === 'TRUCK');
+          const hasDestinoHeader = cells.some(c => c.includes('DESTINO') || c.includes('CIDADE') || c.includes('FILIAL') || c === 'DEST');
+          const hasOrigemHeader = cells.some(c => c.includes('ORIGEM'));
+          const hasTransportadorHeader = cells.some(c => c.includes('TRANSPORTADOR') || c === 'TRANSP');
+          if (hasCavaloHeader || hasDestinoHeader || hasOrigemHeader || hasTransportadorHeader) {
             headerRowIdx = r;
             break;
           }
