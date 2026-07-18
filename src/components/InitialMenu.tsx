@@ -550,7 +550,7 @@ export default function InitialMenu({ onSelect, focusedIndex, setFocusedIndex }:
       </div>
 
       {/* ================= HIGH-FIDELITY FOOTER BAR ================= */}
-      <div className="w-full relative z-10 max-w-[84rem] mx-auto mt-auto">
+      <div className="hidden w-full relative z-10 max-w-[84rem] mx-auto mt-auto">
         <div 
           className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-[#442e1d]/90 via-[#26150b]/95 to-[#442e1d]/90 border-2 border-[#bfa27a]/50 shadow-[0_12px_25px_rgba(0,0,0,0.7),inset_0_1px_4px_rgba(255,255,255,0.15)] flex flex-col sm:flex-row justify-between items-center gap-3 relative text-[10px] font-medium text-[#cfa588]"
         >

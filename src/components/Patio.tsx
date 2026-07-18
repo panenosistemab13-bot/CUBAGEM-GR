@@ -31,6 +31,7 @@ import { rtdb as db, handleFirestoreError, OperationType } from '../firebase';
 interface PatioProps {
   onBack?: () => void;
   isReadOnly?: boolean;
+  currentUser?: string;
 }
 
 // Slotted Vintage Flat-head Screw Component for authentic industrial look
@@ -38,12 +39,12 @@ function Screw({ className }: { className?: string }) {
   return (
     <div 
       className={cn(
-        "w-4 h-4 bg-gradient-to-br from-[#dfc1a0] via-[#8c6039] to-[#3a200a] rounded-full shadow-[1px_2px_2px_rgba(0,0,0,0.65),inset_0.5px_0.5px_1px_rgba(255,255,255,0.25)] relative flex items-center justify-center select-none shrink-0",
+        "w-2.5 h-2.5 bg-gradient-to-br from-[#d9c0a6] to-[#6e4e31] rounded-full shadow-[inset_0.5px_0.5px_1px_rgba(255,255,255,0.4),1px_1px_2px_rgba(0,0,0,0.5)] relative flex items-center justify-center select-none shrink-0",
         className
       )}
     >
       {/* Screw threads flat groove */}
-      <div className="w-2.5 h-[1.5px] bg-[#311b09]/80 rotate-[35deg] rounded-sm shadow-inner" />
+      <div className="w-[60%] h-[1px] bg-[#311b09]/90 rotate-[45deg] rounded-sm shadow-inner" />
     </div>
   );
 }
@@ -57,15 +58,15 @@ const WoodenPlaque: React.FC<{
   return (
     <div 
       className={cn(
-        "rounded-2xl bg-gradient-to-br from-[#f8f1e5] via-[#eddaba] to-[#e4cbab] border-[6px] border-[#311f14] shadow-[0_22px_45px_rgba(0,0,0,0.88),inset_1.5px_1.5px_3px_rgba(255,255,255,0.45)] relative p-6 flex flex-col justify-between ring-2 ring-[#1c1109]/30",
+        "rounded-[10px] bg-[#eedec7] border border-[#a68a6d] shadow-[3px_5px_12px_rgba(0,0,0,0.3)] relative p-6 flex flex-col justify-between",
         className
       )}
     >
       {/* Corner screws */}
-      <Screw className={cn("absolute top-3 left-3 w-3 h-3", screwSize)} />
-      <Screw className={cn("absolute top-3 right-3 w-3 h-3", screwSize)} />
-      <Screw className={cn("absolute bottom-3 left-3 w-3 h-3", screwSize)} />
-      <Screw className={cn("absolute bottom-3 right-3 w-3 h-3", screwSize)} />
+      <Screw className={cn("absolute top-2.5 left-2.5", screwSize)} />
+      <Screw className={cn("absolute top-2.5 right-2.5", screwSize)} />
+      <Screw className={cn("absolute bottom-2.5 left-2.5", screwSize)} />
+      <Screw className={cn("absolute bottom-2.5 right-2.5", screwSize)} />
       
       {/* Plaque content container */}
       <div className="relative z-10 w-full h-full flex flex-col justify-between">
@@ -343,7 +344,8 @@ const getAutoGreeting = (): 'bom dia' | 'boa tarde' | 'boa noite' => {
   }
 };
 
-export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
+export default function Patio({ onBack, isReadOnly = false, currentUser }: PatioProps) {
+  const isAdmin = currentUser === 'jeff';
   const principle = useCurrentPrinciple();
   const [patioData, setPatioData] = useState<PatioItem[]>([]);
   const [pasteText, setPasteText] = useState('');
@@ -844,7 +846,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   };
 
   const handleDeleteCubagem = async (ids: string | string[]) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !isAdmin) return;
     const targetIds = Array.isArray(ids) ? ids : [ids];
     const label = targetIds.length > 1 ? 'o conjunto de cubagens' : 'a cubagem';
     if (window.confirm(`Tem certeza que deseja excluir ${label}?`)) {
@@ -865,7 +867,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   };
 
   const handleClearAllCubagem = async () => {
-    if (isReadOnly) return;
+    if (isReadOnly || !isAdmin) return;
     if (window.confirm("Tem certeza que deseja apagar TODAS as informações salvas na aba de cubagem? Esta ação não pode ser desfeita.")) {
       try {
         await remove(ref(db, 'patio/cubagem'));
@@ -1329,7 +1331,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   };
 
   const handleUndoLastImport = async () => {
-    if (isReadOnly) return;
+    if (isReadOnly || !isAdmin) return;
     if (lastImportedIds.length === 0) return;
     if (window.confirm(`Deseja realmente desmarcar/remover as últimas ${lastImportedIds.length} cubagens importadas recentemente?`)) {
       let undoneCount = 0;
@@ -1382,7 +1384,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   };
 
   const handleDeleteItem = async (id: string) => {
-    if (isReadOnly) return;
+    if (isReadOnly || !isAdmin) return;
     try {
       await remove(ref(db, `patio/veiculos/${id}`));
     } catch (error) {
@@ -1391,7 +1393,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
   };
 
   const handleClearAll = async () => {
-    if (isReadOnly) return;
+    if (isReadOnly || !isAdmin) return;
     try {
       await remove(ref(db, 'patio/veiculos'));
       setPasteText('');
@@ -1532,14 +1534,18 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
         let colTermo = -1;
         let colTransportador = -1;
         let headerRowIdx = -1;
+        const potentialHeaderKeywords = ['CAVALO', 'PLACA', 'DESTINO', 'CIDADE', 'FILIAL', 'ORIGEM', 'TRANSPORTADOR', 'TRANSP', 'MÊS', 'MODELO', 'CARRETA', 'PALLETS', 'PBT', 'VOL'];
 
         for (let r = 0; r < Math.min(rows.length, 5); r++) {
           const cells = rows[r].map(cell => cell.trim().toUpperCase());
-          const hasCavaloHeader = cells.some(c => c.includes('CAVALO') || c === 'PLACA' || c.includes('VEICULO') || c.includes('VEÍCULO') || c.includes('PLACA_CV') || c === 'TRUCK');
-          const hasDestinoHeader = cells.some(c => c.includes('DESTINO') || c.includes('CIDADE') || c.includes('FILIAL') || c === 'DEST');
-          const hasOrigemHeader = cells.some(c => c.includes('ORIGEM'));
-          const hasTransportadorHeader = cells.some(c => c.includes('TRANSPORTADOR') || c === 'TRANSP');
-          if (hasCavaloHeader || hasDestinoHeader || hasOrigemHeader || hasTransportadorHeader) {
+          let keywordCount = 0;
+          for (const cell of cells) {
+            if (potentialHeaderKeywords.some(kw => cell.includes(kw))) {
+              keywordCount++;
+            }
+          }
+          // Only treat as header if we find at least 3 recognizable keywords
+          if (keywordCount >= 3) {
             headerRowIdx = r;
             break;
           }
@@ -1920,6 +1926,17 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
     )
   ).sort() as string[];
 
+  const lastImportedDate = cubagemData.length > 0 && cubagemData[0]?.inseridoEm
+    ? new Date(cubagemData[0].inseridoEm).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      })
+    : null;
+
   const filteredData = safeData.filter(item => {
     const matchesSearch = (item?.cavalo && item.cavalo.toLowerCase().includes(searchTerm.toLowerCase())) || 
                           (item?.carreta && item.carreta.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -2190,12 +2207,14 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     Executar Lote
                   </motion.button>
                   
-                  <button 
-                    onClick={handleClearAll}
-                    className="w-full py-2.5 text-[#5c3c24] hover:text-[#8c060a] hover:border-[#8c060a]/30 font-black text-[10px] uppercase tracking-[0.25em] border-2 border-[#5c3c24]/20 rounded-xl bg-[#f0e3d2]/60 hover:bg-[#ebd9c3] transition-all cursor-pointer shadow-sm"
-                  >
-                    Resetar Registros
-                  </button>
+                  {isAdmin && (
+                    <button 
+                      onClick={handleClearAll}
+                      className="w-full py-2.5 text-[#5c3c24] hover:text-[#8c060a] hover:border-[#8c060a]/30 font-black text-[10px] uppercase tracking-[0.25em] border-2 border-[#5c3c24]/20 rounded-xl bg-[#f0e3d2]/60 hover:bg-[#ebd9c3] transition-all cursor-pointer shadow-sm"
+                    >
+                      Resetar Registros
+                    </button>
+                  )}
                 </div>
               )}
 
@@ -2250,13 +2269,13 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em]">Identificador</th>
                     <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em]">Está no Pátio?</th>
                     <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em]">Assinou?</th>
-                    {!isReadOnly && <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em] text-center">--</th>}
+                    {!isReadOnly && isAdmin && <th className="py-3 px-4 text-[10px] font-black text-[#5c3c24]/70 uppercase tracking-[0.25em] text-center">--</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#5c3c24]/10">
                   {filteredData.length === 0 ? (
                     <tr>
-                      <td colSpan={isReadOnly ? 3 : 4} className="py-24 text-center">
+                      <td colSpan={isReadOnly || !isAdmin ? 3 : 4} className="py-24 text-center">
                         <span className="text-[#5c3c24]/40 font-black uppercase tracking-[0.4em] text-[11px] animate-pulse">Aguardando Sincronização de Fluxo</span>
                       </td>
                     </tr>
@@ -2316,7 +2335,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                         </td>
 
                         {/* Action Delete */}
-                        {!isReadOnly && (
+                        {!isReadOnly && isAdmin && (
                           <td className="py-3.5 px-4 text-center">
                             <button 
                               onClick={() => handleDeleteItem(item.id)}
@@ -2348,7 +2367,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     className="bg-[#fcf9f2] border-2 border-[#5c3c24]/30 rounded-2xl p-4 shadow-md flex flex-col gap-4 relative hover:border-[#8c060a]/40 transition-colors text-left font-sans"
                   >
                     {/* Delete action button */}
-                    {!isReadOnly && (
+                    {!isReadOnly && isAdmin && (
                       <button 
                         onClick={() => handleDeleteItem(item.id)}
                         className="absolute top-3.5 right-3.5 p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
@@ -2923,18 +2942,18 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
             <WoodenPlaque className="flex flex-col gap-5 p-6 h-full" screwSize="w-2.5 h-2.5">
               
               {/* Header inside the console */}
-              <div className="flex items-center justify-between pb-3.5 border-b border-[#5c3c24]/30 text-left">
+              <div className="flex items-center justify-between pb-4 border-b border-[#a68a6d]/40 text-left">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#ca1a20]/10 border border-[#ca1a20]/20 rounded-2xl flex items-center justify-center text-[#ca1a20]">
+                  <div className="w-10 h-10 bg-[#a9181a] rounded-full flex items-center justify-center text-white shadow-sm">
                     <Database size={18} />
                   </div>
                   <div>
                     <h2 className="text-sm font-black text-[#311f14] uppercase tracking-widest">Painel de Cubagem</h2>
-                    <p className="text-[10px] font-bold text-[#5c3c24]/80 uppercase tracking-wider mt-0.5">Importação e Entrada de Dados</p>
+                    <p className="text-[9px] font-black text-[#5c3c24]/80 uppercase tracking-wider mt-0.5">Importação e Entrada de Dados</p>
                   </div>
                 </div>
                 
-                <span className="px-2.5 py-1 bg-[#ca1a20]/10 border border-[#ca1a20]/20 rounded-full text-[9px] font-black uppercase text-[#ca1a20] tracking-wider">
+                <span className="px-3 py-1.5 bg-[#a9181a] rounded-full text-[9px] font-black uppercase text-white tracking-widest shadow-[inset_0_2px_4px_rgba(0,0,0,0.3)]">
                   M³ CONSOLE
                 </span>
               </div>
@@ -2976,102 +2995,108 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     {/* PDF IMPORT BOX REMOVED */}
 
                     {/* MANUAL ADDITION SECTION */}
-                    <form onSubmit={handleAddCubagemManual} className="bg-[#faf6f0] border-2 border-[#5c3c24]/30 rounded-2xl p-5 space-y-4 text-left shadow-lg relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-1.5 h-full bg-[#ca1a20]" />
-                      <div className="text-xs font-black uppercase tracking-wider text-[#311f14] border-b border-[#5c3c24]/20 pb-2 flex items-center gap-1.5">
-                        <Plus size={14} className="text-[#ca1a20] stroke-[3]" />
-                        <span>Inserir Manualmente</span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
+                    <form onSubmit={handleAddCubagemManual} className="bg-[#faf5ec] border border-[#d3c0a5] rounded-xl p-6 space-y-4 text-left shadow-sm relative overflow-hidden">
+                      <div className="absolute top-0 left-0 w-1.5 h-full bg-[#a9181a]" />
+                      
+                      {/* Row 1: Cavalo & Carreta */}
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Placa Cavalo:</label>
+                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Placa Cavalo:</label>
                           <input 
                             type="text" 
                             placeholder="Ex: ABC1234"
                             value={manualCavalo}
                             onChange={(e) => setManualCavalo(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
                           />
                         </div>
 
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Placa Carreta:</label>
+                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24] flex items-center gap-1">
+                            <Truck size={10} className="text-[#ca1a20] shrink-0" />
+                            <span>Placa Carreta:</span>
+                          </label>
                           <input 
                             type="text" 
                             placeholder="Ex: XYZ9D87"
                             value={manualCarreta}
                             onChange={(e) => setManualCarreta(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/30 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
                           />
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Volume Cubado (M³):</label>
-                        <input 
-                          type="text" 
-                          placeholder="Ex: 94"
-                          value={manualM3}
-                          onChange={(e) => setManualM3(e.target.value)}
-                          className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-2">
+                      {/* Row 2: Volume Cubado & Data */}
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Data:</label>
+                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Volume Cubado (M³):</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: 94"
+                            value={manualM3}
+                            onChange={(e) => setManualM3(e.target.value)}
+                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Data:</label>
                           <input 
                             type="text" 
                             placeholder="Ex: 02/01"
                             value={manualData}
                             onChange={(e) => setManualData(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
                           />
                         </div>
                       </div>
 
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Transportador:</label>
-                        <input 
-                          type="text" 
-                          placeholder="Ex: COMBOIO"
-                          value={manualTransportador}
-                          onChange={(e) => setManualTransportador(e.target.value)}
-                          className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Modelo Carreta:</label>
-                        <input 
-                          type="text" 
-                          placeholder="Ex: BAÚ"
-                          value={manualModeloCarreta}
-                          onChange={(e) => setManualModeloCarreta(e.target.value)}
-                          className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
+                      {/* Row 3: Transportador & Modelo Carreta */}
+                      <div className="grid grid-cols-2 gap-4">
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">Nº Pallets:</label>
+                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Transportador:</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: COMBOIO"
+                            value={manualTransportador}
+                            onChange={(e) => setManualTransportador(e.target.value)}
+                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
+                          />
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Modelo Carreta:</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: BAÚ"
+                            value={manualModeloCarreta}
+                            onChange={(e) => setManualModeloCarreta(e.target.value)}
+                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Row 4: Nº Pallets & PBT (Ton) */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="flex flex-col gap-1.5">
+                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Nº Pallets:</label>
                           <input 
                             type="text" 
                             placeholder="Ex: 24"
                             value={manualPallets}
                             onChange={(e) => setManualPallets(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
                           />
                         </div>
+
                         <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">PBT (Ton):</label>
+                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">PBT (Ton):</label>
                           <input 
                             type="text" 
                             placeholder="Ex: 24"
                             value={manualPbt}
                             onChange={(e) => setManualPbt(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-black rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
+                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
                           />
                         </div>
                       </div>
@@ -3081,7 +3106,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                         <motion.div 
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
-                          className="bg-[#f0dfcc]/50 border-2 border-[#5c3c24]/20 rounded-xl p-3 flex flex-col items-center justify-center gap-2 mt-3 select-none shadow-inner"
+                          className="bg-[#f0dfcc]/50 border border-[#d3c0a5] rounded-xl p-3 flex flex-col items-center justify-center gap-2 mt-3 select-none shadow-inner"
                         >
                           <span className="text-[8.5px] font-black uppercase tracking-widest text-[#5c3c24]">Placas Digitadas (Padrão Mercosul)</span>
                           <div className="flex gap-4 flex-wrap justify-center items-center">
@@ -3103,7 +3128,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
 
                       <button 
                         type="submit"
-                        className="w-full py-2.5 px-4 bg-gradient-to-b from-[#ca1a20] to-[#800609] hover:from-[#e4252c] hover:to-[#990a0d] text-[#fdefd1] text-[10px] font-black uppercase tracking-widest rounded-xl shadow-md border border-[#ff3e47]/20 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        className="w-full mt-2 py-3 px-4 bg-gradient-to-b from-[#b21c1f] to-[#7a1012] hover:from-[#c92428] hover:to-[#911618] border-b-[3px] border-[#4a0809] text-white text-[10px] font-black uppercase tracking-widest rounded-[12px] shadow-[0_4px_10px_rgba(169,24,26,0.3)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <Plus size={13} className="stroke-[3]" />
                         ADICIONAR CUBAGEM
@@ -3111,15 +3136,24 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                     </form>
 
                     {/* SPREADSHEET PASTE SECTION */}
-                    <div className="bg-[#faf6f0] border-2 border-[#5c3c24]/30 rounded-2xl p-5 space-y-4 text-left shadow-lg relative overflow-hidden">
+                    <div className="bg-[#faf5ec] border border-[#d3c0a5] rounded-xl p-6 space-y-4 text-left shadow-sm relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1.5 h-full bg-[#5c3c24]" />
                       <div className="text-xs font-black uppercase tracking-wider text-[#311f14] border-b border-[#5c3c24]/20 pb-2 flex items-center gap-1.5">
                         <Database size={14} className="text-[#5c3c24]" />
                         <span>Colar Dados do Excel / Planilha</span>
                       </div>
                       
+                      {lastImportedDate && (
+                        <div className="flex items-center gap-2 bg-white border border-[#d3c0a5] px-3 py-2 rounded-full text-[9px] font-black text-[#5c3c24] uppercase">
+                          <Clock size={12} className="text-[#ca1a20] shrink-0" />
+                          <span>
+                            Última atualização: <span className="text-[#ca1a20]">{lastImportedDate}</span>
+                          </span>
+                        </div>
+                      )}
+                      
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24]">
+                        <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">
                           Cole as colunas (Será ignorado se M³ estiver vazio):
                         </label>
                         <textarea 
@@ -3127,14 +3161,14 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                           placeholder="Exemplo:&#10;ABC1234  XYZ9D87  112.5&#10;KJH4D21  72.0"
                           value={cubagemPasteText}
                           onChange={(e) => setCubagemPasteText(e.target.value)}
-                          className="w-full bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] text-xs font-semibold rounded-xl py-2.5 px-3.5 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors font-mono resize-none placeholder:font-sans placeholder:text-[10px] placeholder:text-[#5c3c24]/50"
+                          className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-semibold rounded-2xl py-3 px-4 outline-none focus:ring-2 focus:ring-[#5c3c24]/20 focus:border-[#5c3c24] transition-colors font-mono resize-none placeholder:font-sans placeholder:text-[10px] placeholder:text-[#5c3c24]/50"
                         />
                       </div>
 
                       <button 
                         type="button"
                         onClick={handleParsePastedData}
-                        className="w-full py-2.5 px-4 bg-[#5c3c24] hover:bg-[#442e1d] text-white text-[10px] font-black uppercase tracking-widest rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                        className="w-full mt-2 py-3 px-4 bg-gradient-to-b from-[#5c3c24] to-[#3a200a] hover:from-[#6b482e] hover:to-[#4a2e16] border-b-[3px] border-[#221004] text-white text-[10px] font-black uppercase tracking-widest rounded-[12px] shadow-[0_4px_10px_rgba(92,60,36,0.3)] transition-all cursor-pointer flex items-center justify-center gap-1.5"
                       >
                         <Database size={13} />
                         ANALISAR PLANILHA
@@ -3228,7 +3262,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                 )}
 
                 {/* Batch Undo Widget if applicable */}
-                {lastImportedIds.length > 0 && !isShowingPreview && (
+                {lastImportedIds.length > 0 && !isShowingPreview && isAdmin && (
                   <motion.div 
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
@@ -3275,7 +3309,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-                  {cubagemData.length > 0 && !isReadOnly && (
+                  {cubagemData.length > 0 && !isReadOnly && isAdmin && (
                     <button
                       type="button"
                       onClick={handleClearAllCubagem}
@@ -3293,36 +3327,36 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                       placeholder="PROCURAR PLACA..."
                       value={cubagemSearch}
                       onChange={(e) => setCubagemSearch(e.target.value)}
-                      className="w-full h-9 bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] placeholder-[#5c3c24]/50 font-bold text-[10px] uppercase tracking-widest rounded-xl py-2 pl-9 pr-4 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-all"
+                      className="w-full h-10 bg-white border border-[#c2b19f] text-[#1c1109] placeholder-[#311f14]/50 font-black text-[11px] uppercase tracking-widest rounded-full py-2.5 pl-10 pr-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-all"
                     />
                   </div>
                 </div>
               </div>
 
               {/* FILTERS PANEL */}
-              <div className="flex flex-wrap items-center gap-4 mb-4 bg-[#f0dfcc]/30 p-3 rounded-2xl border border-[#5c3c24]/20 text-left">
-                <div className="flex items-center gap-2 text-[#5c3c24] text-[10px] font-black uppercase tracking-wider">
-                  <Filter size={14} className="text-[#ca1a20]" />
+              <div className="flex flex-wrap items-center gap-4 mb-4 bg-white p-4 rounded-xl border border-[#d3c0a5] text-left shadow-sm">
+                <div className="flex items-center gap-2 text-[#311f14] text-[10px] font-black uppercase tracking-wider">
+                  <Filter size={14} className="text-[#a9181a]" />
                   <span>Filtrar Base:</span>
                 </div>
                 
                 <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto">
                   {/* Transportador Filter Selector */}
                   <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 min-w-[140px]">
-                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap">Pesquisar Transportadora:</span>
+                    <span className="text-[9px] font-black text-[#311f14]/80 uppercase whitespace-nowrap pl-1">Pesquisar Transportadora:</span>
                     <input
                       type="text"
                       value={cubagemCarrierSearch}
                       onChange={(e) => setCubagemCarrierSearch(e.target.value)}
                       placeholder="Buscar..."
-                      className="w-full sm:w-[120px] bg-white border border-[#5c3c24]/30 text-[#1c1109] placeholder-[#5c3c24]/40 font-bold text-[10px] rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] uppercase shadow-sm"
+                      className="w-full sm:w-[120px] bg-white border border-[#c2b19f] text-[#1c1109] placeholder-[#311f14]/40 font-black text-[11px] rounded-full px-3 py-2 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] uppercase transition-colors"
                     />
                     
-                    <span className="text-[9px] font-bold text-[#5c3c24]/80 uppercase whitespace-nowrap sm:ml-2">Transportador:</span>
+                    <span className="text-[9px] font-black text-[#311f14]/80 uppercase whitespace-nowrap pl-1 sm:ml-2">Transportador:</span>
                     <select
                       value={cubagemCarrierFilter}
                       onChange={(e) => setCubagemCarrierFilter(e.target.value)}
-                      className="w-full sm:w-auto bg-white border border-[#5c3c24]/30 text-[#1c1109] font-bold text-[10px] rounded-xl px-2.5 py-1.5 outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] uppercase cursor-pointer shadow-sm"
+                      className="w-full sm:w-auto bg-white border border-[#c2b19f] text-[#1c1109] font-black text-[11px] rounded-full px-3 py-2 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] uppercase cursor-pointer transition-colors"
                     >
                       <option value="">TODOS</option>
                       {uniqueCarriers
@@ -3590,24 +3624,24 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                       {/* Desktop Table View */}
                       <div className="hidden md:block">
                         <table className="w-full text-left border-collapse">
-                          <thead className="sticky top-0 z-10 bg-[#f0dfcc] shadow-sm">
-                            <tr className="border-b border-[#5c3c24]/30">
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#5c3c24]/15">Data</th>
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15">Transportador</th>
-                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#ca1a20] uppercase tracking-wider bg-red-100/30 text-center border-r border-[#5c3c24]/15">CAVALO(S)</th>
-                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15">CARRETA(S)</th>
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">Modelo Carreta</th>
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">Nº Pallets</th>
-                              <th className="px-2 py-2.5 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#5c3c24]/15 font-sans">PBT (Ton)</th>
-                              <th className="px-4 py-2.5 text-[10.5px] font-black text-[#047857] uppercase tracking-wider bg-emerald-100/30 text-center border-r border-[#5c3c24]/15">Cubagem (M³)</th>
-                              {!isReadOnly && <th className="px-1.5 py-2.5 text-[8.5px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>}
+                          <thead className="sticky top-0 z-10 bg-[#faf5ec] shadow-[0_2px_4px_rgba(0,0,0,0.05)] border-b border-[#d3c0a5]">
+                            <tr>
+                              <th className="px-2 py-3 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider border-r border-[#d3c0a5]">Data</th>
+                              <th className="px-2 py-3 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#d3c0a5]">Transportador</th>
+                              <th className="px-4 py-3 text-[10.5px] font-black text-[#ca1a20] uppercase tracking-wider bg-red-50 text-center border-r border-[#d3c0a5]">CAVALO(S)</th>
+                              <th className="px-4 py-3 text-[10.5px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#d3c0a5]">CARRETA(S)</th>
+                              <th className="px-2 py-3 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#d3c0a5] font-sans">Modelo Carreta</th>
+                              <th className="px-2 py-3 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#d3c0a5] font-sans">Nº Pallets</th>
+                              <th className="px-2 py-3 text-[9px] font-black text-[#5c3c24] uppercase tracking-wider text-center border-r border-[#d3c0a5] font-sans">PBT (Ton)</th>
+                              <th className="px-4 py-3 text-[10.5px] font-black text-[#047857] uppercase tracking-wider bg-emerald-50 text-center border-r border-[#d3c0a5]">Cubagem (M³)</th>
+                              {!isReadOnly && <th className="px-1.5 py-3 text-[8.5px] font-black text-[#5c3c24] uppercase tracking-wider text-center">Ações</th>}
                             </tr>
                           </thead>
-                          <tbody className="bg-[#fcfaf7]/40">
+                          <tbody className="bg-white">
                             {groupedFiltered.map(item => {
                               const isEditing = editingCubagemId === item.id;
                               return (
-                                <tr key={item.id} className="hover:bg-[#f0dfcc]/25 transition-colors border-b-[3px] border-[#5c3c24]/50">
+                                <tr key={item.id} className="hover:bg-[#faf5ec] transition-colors border-b border-[#d3c0a5]">
                                   {isEditing ? (
                                     <>
                                       {/* Data Edit */}
@@ -3905,14 +3939,16 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                             >
                                               <Edit size={12} />
                                             </button>
-                                            <button 
-                                              type="button"
-                                              onClick={() => handleDeleteCubagem(item.items.map(sub => sub.id))}
-                                              className="w-7 h-7 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
-                                              title="Excluir Registro"
-                                            >
-                                              <Trash2 size={12} />
-                                            </button>
+                                            {isAdmin && (
+                                              <button 
+                                                type="button"
+                                                onClick={() => handleDeleteCubagem(item.items.map(sub => sub.id))}
+                                                className="w-7 h-7 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
+                                                title="Excluir Registro"
+                                              >
+                                                <Trash2 size={12} />
+                                              </button>
+                                            )}
                                           </div>
                                         </td>
                                       )}
@@ -4105,14 +4141,16 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
                                       >
                                         <Edit size={12} className="stroke-[2.5]" />
                                       </button>
-                                      <button 
-                                        type="button"
-                                        onClick={() => handleDeleteCubagem(item.items.map(sub => sub.id))}
-                                        className="p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
-                                        title="Excluir Registro"
-                                      >
-                                        <Trash2 size={12} className="stroke-[2.5]" />
-                                      </button>
+                                      {isAdmin && (
+                                        <button 
+                                          type="button"
+                                          onClick={() => handleDeleteCubagem(item.items.map(sub => sub.id))}
+                                          className="p-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-xl transition-all cursor-pointer shadow-sm active:scale-95"
+                                          title="Excluir Registro"
+                                        >
+                                          <Trash2 size={12} className="stroke-[2.5]" />
+                                        </button>
+                                      )}
                                     </div>
                                   )}
 
@@ -4221,7 +4259,7 @@ export default function Patio({ onBack, isReadOnly = false }: PatioProps) {
       )}
 
       {/* ================= PORTABLE FOOTER METAL PLATE BAR ================= */}
-      <div className="w-full relative z-10 max-w-[94rem] mx-auto mt-6 shrink-0">
+      <div className="hidden w-full relative z-10 max-w-[94rem] mx-auto mt-6 shrink-0">
         <div 
           className="w-full py-3 px-6 rounded-2xl bg-gradient-to-r from-[#442e1d]/95 via-[#26150b]/98 to-[#442e1d]/95 border-2 border-[#bfa27a]/50 shadow-[0_12px_25px_rgba(0,0,0,0.7),inset_0_1px_4px_rgba(255,255,255,0.15)] flex flex-col md:flex-row justify-between items-center gap-3 relative text-[9px] font-bold text-[#cfa588] select-none text-center md:text-left"
         >

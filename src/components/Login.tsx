@@ -25,9 +25,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
       if (
         (cleanUser === 'grupogr' && cleanPass === 'cubagemgr2026#') ||
-        (cleanUser === 'pcp' && cleanPass === 'cubagempcp26')
+        (cleanUser === 'pcp' && cleanPass === 'cubagempcp26') ||
+        (cleanUser === 'jeff' && cleanPass === 'trescafe2027')
       ) {
-        onLoginSuccess(cleanUser === 'grupogr' ? 'Grupo GR' : 'PCP');
+        if (cleanUser === 'jeff') {
+          onLoginSuccess('jeff');
+        } else {
+          onLoginSuccess(cleanUser === 'grupogr' ? 'Grupo GR' : 'PCP');
+        }
       } else {
         setError('Usuário ou senha incorretos. Por favor, tente novamente.');
         setIsSubmitting(false);

@@ -1301,7 +1301,7 @@ export default function Checklist() {
       </AnimatePresence>
 
       {/* Elegant Footer Details */}
-      <div className="relative z-10 text-center py-6 border-t border-[#311a0c] flex flex-col sm:flex-row items-center justify-between text-xs text-[#8c7465] mt-10">
+      <div className="hidden relative z-10 text-center py-6 border-t border-[#311a0c] flex-col sm:flex-row items-center justify-between text-xs text-[#8c7465] mt-10">
         <span className="mb-2 sm:mb-0">© 2026 Sistema PGR • Todos os direitos reservados.</span>
         <div className="flex items-center gap-1 text-[#a47a46] font-serif font-extrabold italic">
           <span>Feito com paixão. Feito para entregar.</span>

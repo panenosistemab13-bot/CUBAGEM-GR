@@ -67,6 +67,8 @@ function Screw({ className }: { className?: string }) {
   );
 }
 
+import ActiveUsers from './components/ActiveUsers';
+
 export default function App() {
   const principle = useCurrentPrinciple();
   const [currentUser, setCurrentUser] = useState<string | null>(() => {
@@ -174,7 +176,7 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case 'cubagem':
-        return <Patio isReadOnly={currentUser === 'PCP'} />;
+        return <Patio isReadOnly={currentUser === 'PCP'} currentUser={currentUser || undefined} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center p-20 text-zinc-500">
@@ -279,7 +281,9 @@ export default function App() {
         {/* Top Header (Only on active modules) */}
         {activeTab !== 'menu' && (
           <header className="h-20 shrink-0 flex items-center justify-between px-8 z-50 relative pointer-events-none">
-            <div className="flex items-center gap-3 w-auto md:w-1/4 pointer-events-auto">
+            <div className="flex items-center gap-3 w-auto md:w-1/3 pointer-events-auto">
+              <ActiveUsers currentUser={currentUser} />
+              
               <div className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-1.5 sm:py-2 bg-[#E8D4B0] border-2 border-[#3A2414] rounded-full shadow-md">
                 <div className="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-[#B32025] flex items-center justify-center text-white text-[9px] sm:text-[10px] font-black uppercase shrink-0">
                   {currentUser ? currentUser[0] : 'U'}
@@ -510,11 +514,13 @@ export default function App() {
         {/* Scrollable Canvas */}
         <main id="main-scroll-container" className={cn(
           "flex-1 relative",
-          activeTab === 'menu' ? "overflow-hidden" : "overflow-y-visible md:overflow-y-auto pb-4 md:pb-8"
+          activeTab === 'menu' ? "overflow-hidden" : 
+          activeTab === 'cubagem' ? "overflow-y-auto" : 
+          "overflow-y-visible md:overflow-y-auto pb-4 md:pb-8"
         )}>
           <div className={cn(
             "w-full max-w-full relative z-10 flex flex-col transition-all duration-500",
-            activeTab === 'menu' ? "h-full p-0" : "min-h-full p-4 sm:p-6 md:p-8"
+            activeTab === 'menu' || activeTab === 'cubagem' ? "h-full p-0" : "min-h-full p-4 sm:p-6 md:p-8"
           )}>
             {activeTab !== 'menu' && activeTab !== 'cubagem' && activeTab !== 'presence' && activeTab !== 'averbacao' && (
                <motion.div 
@@ -587,7 +593,7 @@ export default function App() {
 
         {/* System Footer (Only on active modules) */}
         {activeTab !== 'menu' && activeTab !== 'cubagem' && (
-          <footer className="shrink-0 py-2 px-6 flex flex-row items-center justify-between gap-4 relative z-50 text-[10px] font-mono font-bold text-[#c7a482] bg-gradient-to-b from-[#1a0f08] to-[#0a0502] border-t border-[#4a2e1b]/50 shadow-[0_-4px_15px_rgba(0,0,0,0.5)]">
+          <footer className="hidden shrink-0 py-2 px-6 flex-row items-center justify-between gap-4 relative z-50 text-[10px] font-mono font-bold text-[#c7a482] bg-gradient-to-b from-[#1a0f08] to-[#0a0502] border-t border-[#4a2e1b]/50 shadow-[0_-4px_15px_rgba(0,0,0,0.5)]">
             <span className="opacity-80 flex-1 hidden sm:block">
               © 2026 <strong className="text-[#e2c19e]">Sistema PGR</strong>
             </span>
