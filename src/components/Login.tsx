@@ -26,7 +26,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       if (
         (cleanUser === 'grupogr' && cleanPass === 'cubagemgr2026#') ||
         (cleanUser === 'pcp' && cleanPass === 'cubagempcp26') ||
-        (cleanUser === 'jeff' && cleanPass === 'trescafe2027')
+        (cleanUser === 'jeff' && cleanPass === '#trescafe2027')
       ) {
         if (cleanUser === 'jeff') {
           onLoginSuccess('jeff');
