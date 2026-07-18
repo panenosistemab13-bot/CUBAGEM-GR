@@ -24,7 +24,6 @@
   
   html {
     min-height: 100%;
-    zoom: 90%;
   }
 
   #root {
@@ -89,7 +88,6 @@
     background-size: cover !important;
     background-position: center !important;
     background-repeat: no-repeat !important;
-    background-attachment: fixed !important;
 }
 
 .force-bg-patio {
@@ -97,5 +95,4 @@
     background-size: cover !important;
     background-position: center !important;
     background-repeat: no-repeat !important;
-    background-attachment: fixed !important;
 }

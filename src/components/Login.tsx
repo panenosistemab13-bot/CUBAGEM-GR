@@ -42,7 +42,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#2D1A10] force-bg-login"
+      className="fixed inset-0 flex items-center justify-center p-4 overflow-hidden bg-[#2D1A10] force-bg-login"
     >
       {/* Decorative Warm Light Radial Glow */}
       <div 

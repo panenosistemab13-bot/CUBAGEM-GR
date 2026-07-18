@@ -244,7 +244,7 @@ export default function App() {
       
       {/* Immersive Background Image / Radial glow */}
       {(activeTab === 'menu' || activeTab === 'checklist') ? (
-        <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
            <img
              src={toAbsoluteUrl(coffeeShopBg)}
              className="w-full h-full object-cover select-none brightness-105 saturate-110"
@@ -255,7 +255,7 @@ export default function App() {
            <div className="absolute inset-0 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at center, rgba(181, 138, 76, 0.15) 0%, rgba(242, 228, 204, 0.45) 100%)' }} />
         </div>
       ) : (
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="fixed inset-0 z-0 overflow-hidden pointer-events-none">
           <AnimatePresence mode="wait">
             {backgroundImages[activeTab] && (
               <motion.img
