@@ -1951,7 +1951,7 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
 
   return (
     <div 
-      className="w-full min-h-full text-[#2b180d] relative flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-x-hidden select-none force-bg-patio"
+      className="w-full min-h-full text-[#2b180d] relative flex flex-col justify-between p-4 sm:p-6 md:p-8 font-sans overflow-x-hidden select-none"
     >
       
        {/* ================= HEADER AREA ================= */}
