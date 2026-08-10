@@ -3,7 +3,8 @@ import { motion } from 'motion/react';
 import { 
   Route, 
   Heart,
-  Database
+  Database,
+  FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -24,6 +25,14 @@ const menuItems: MenuItem[] = [
     icon: Database,
     styleClass: "wood-button bg-gradient-to-r from-[#2a170b] via-[#3a2214] to-[#2a170b] border-y border-[#4a2e1c] shadow-[inset_0_1px_3px_rgba(255,255,255,0.1),0_4px_10px_rgba(0,0,0,0.6)] text-[#e6c29b] transition-all duration-300",
     iconStyle: "border-[#e6c29b]/35 text-[#e6c29b]"
+  },
+  { 
+    id: 'ordem_coleta', 
+    subtitle: 'IMPORTAÇÃO & DOCS', 
+    title: 'ORDEM DE COLETA', 
+    icon: FileSpreadsheet,
+    styleClass: "wood-button bg-gradient-to-r from-[#3a1d0f] via-[#5c2d18] to-[#3a1d0f] border-y border-[#7a3b20] shadow-[inset_0_1px_3px_rgba(255,255,255,0.15),0_4px_10px_rgba(0,0,0,0.6)] text-[#f5e0c8] transition-all duration-300",
+    iconStyle: "border-[#f5e0c8]/35 text-[#f5e0c8]"
   },
   { 
     id: 'rotas', 

@@ -23,10 +23,13 @@ import {
   Save,
   FileText,
   Clock,
-  Filter
+  Filter,
+  Boxes
 } from 'lucide-react';
 import { ref, push, set, onValue, remove, update } from 'firebase/database';
 import { rtdb as db, handleFirestoreError, OperationType } from '../firebase';
+import { CubagemTableRow, CubagemRowItem, CubagemGroupedItem } from './CubagemTableRow';
+import { parseBitremData } from '../utils/orderParser';
 
 interface PatioProps {
   onBack?: () => void;
@@ -422,20 +425,10 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
   const [cubagemPdfFile, setCubagemPdfFile] = useState<File | null>(null);
   const [isProcessingCubagem, setIsProcessingCubagem] = useState(false);
   const [cubagemStatusMsg, setCubagemStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
-  const [editingGroupItems, setEditingGroupItems] = useState<{ 
-    id: string; 
-    carreta: string; 
-    m3: string;
-    mes?: string;
-    dia?: string;
-    data?: string;
-    transportador?: string;
-    pallets?: string;
-    pbt?: string;
-    modeloCarreta?: string;
-  }[]>([]);
+  const [editingGroupItems, setEditingGroupItems] = useState<CubagemRowItem[]>([]);
 
   // Manual input states
+  const [manualVehicleMode, setManualVehicleMode] = useState<'simples' | 'bitrem'>('simples');
   const [manualCavalo, setManualCavalo] = useState('');
   const [manualCarreta, setManualCarreta] = useState('');
   const [manualM3, setManualM3] = useState('');
@@ -445,7 +438,23 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
   const [manualTransportador, setManualTransportador] = useState('');
   const [manualPallets, setManualPallets] = useState('');
   const [manualPbt, setManualPbt] = useState('');
-  const [manualModeloCarreta, setManualModeloCarreta] = useState('');
+  const [manualModeloCarreta, setManualModeloCarreta] = useState('SIDER');
+
+  // Manual C1 & C2 states for Bitrem
+  const [manualC1, setManualC1] = useState({
+    placa: '',
+    modelo: 'SIDER',
+    m3: '',
+    pallets: '',
+    pbt: ''
+  });
+  const [manualC2, setManualC2] = useState({
+    placa: '',
+    modelo: 'SIDER',
+    m3: '',
+    pallets: '',
+    pbt: ''
+  });
   const [cubagemPasteText, setCubagemPasteText] = useState('');
   const [parsedPreviewItems, setParsedPreviewItems] = useState<{ 
     cavalo: string; 
@@ -721,55 +730,219 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
   const handleAddCubagemManual = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isReadOnly) return;
-    if (!manualCavalo.trim() || !manualCarreta.trim() || !manualM3.trim()) {
-      setCubagemStatusMsg({ type: 'error', text: 'Preencha todos os campos.' });
-      setTimeout(() => setCubagemStatusMsg(null), 3000);
-      return;
-    }
 
-    const cleanCarreta = manualCarreta.replace(/[\s-]/g, '').toUpperCase();
+    const isBitrem = manualVehicleMode === 'bitrem';
     const cleanCavalo = manualCavalo.replace(/[\s-]/g, '').toUpperCase();
 
-    // Verificação de duplicidade de Carreta
-    const exists = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === cleanCarreta);
-    if (exists) {
-      setCubagemStatusMsg({ type: 'error', text: `A Carreta ${cleanCarreta} já possui cubagem cadastrada!` });
-      setTimeout(() => setCubagemStatusMsg(null), 4000);
+    if (!cleanCavalo) {
+      setCubagemStatusMsg({ type: 'error', text: 'Preencha a Placa do Cavalo.' });
+      setTimeout(() => setCubagemStatusMsg(null), 3000);
       return;
     }
 
-    try {
-      const cubagemRef = ref(db, 'patio/cubagem');
-      const newItemRef = push(cubagemRef);
-      await set(newItemRef, {
-        cavalo: cleanCavalo,
-        carreta: cleanCarreta,
-        m3: manualM3.trim(),
-        mes: manualMes.trim(),
-        dia: manualDia.trim(),
-        data: manualData.trim(),
-        transportador: manualTransportador.trim(),
-        pallets: manualPallets.trim(),
-        pbt: manualPbt.trim(),
-        modeloCarreta: manualModeloCarreta.trim(),
-        inseridoEm: new Date().toISOString()
-      });
-      setManualCavalo('');
-      setManualCarreta('');
-      setManualM3('');
-      setManualMes('');
-      setManualDia('');
-      setManualData('');
-      setManualTransportador('');
-      setManualPallets('');
-      setManualPbt('');
-      setManualModeloCarreta('');
-      setCubagemStatusMsg({ type: 'success', text: 'Cubagem adicionada com sucesso!' });
-      setTimeout(() => setCubagemStatusMsg(null), 3000);
-    } catch (error) {
-      console.error("Erro ao adicionar cubagem:", error);
-      setCubagemStatusMsg({ type: 'error', text: 'Erro ao salvar cubagem.' });
-      setTimeout(() => setCubagemStatusMsg(null), 3000);
+    let finalCarreta = '';
+    let finalM3 = '';
+    let finalPallets = '';
+    let finalPbt = '';
+    let finalModelo = '';
+
+    if (isBitrem) {
+      const c1Placa = manualC1.placa.replace(/[\s-]/g, '').toUpperCase();
+      const c2Placa = manualC2.placa.replace(/[\s-]/g, '').toUpperCase();
+      if (!c1Placa || !c2Placa) {
+        setCubagemStatusMsg({ type: 'error', text: 'Preencha as Placas da C1 e C2.' });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+        return;
+      }
+      if (!manualC1.m3 || !manualC2.m3) {
+        setCubagemStatusMsg({ type: 'error', text: 'Preencha o Volume (M³) de C1 e C2.' });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+        return;
+      }
+
+      // Verificação de duplicidade de Carreta
+      const existsC1 = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === c1Placa);
+      const existsC2 = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === c2Placa);
+      if (existsC1 || existsC2) {
+        setCubagemStatusMsg({ type: 'error', text: `A Carreta ${existsC1 ? c1Placa : c2Placa} já possui cubagem cadastrada!` });
+        setTimeout(() => setCubagemStatusMsg(null), 4000);
+        return;
+      }
+
+      const sumM3 = (Number(manualC1.m3) || 0) + (Number(manualC2.m3) || 0);
+      const sumPallets = (Number(manualC1.pallets) || 0) + (Number(manualC2.pallets) || 0);
+      const sumPbt = Number(((Number(manualC1.pbt) || 0) + (Number(manualC2.pbt) || 0)).toFixed(1));
+
+      try {
+        const cubagemRef = ref(db, 'patio/cubagem');
+        const nowIso = new Date().toISOString();
+
+        // 1. Salva C1 como item individual
+        const refC1 = push(cubagemRef);
+        await set(refC1, {
+          cavalo: cleanCavalo,
+          carreta: c1Placa,
+          m3: String(manualC1.m3).trim(),
+          mes: manualMes.trim(),
+          dia: manualDia.trim(),
+          data: manualData.trim(),
+          transportador: manualTransportador.trim(),
+          pallets: String(manualC1.pallets || '').trim(),
+          pbt: String(manualC1.pbt || '').trim(),
+          modeloCarreta: manualC1.modelo || 'SIDER',
+          tipoVeiculo: 'bitrem',
+          tag: 'C1',
+          inseridoEm: nowIso
+        });
+
+        // 2. Salva C2 como item individual
+        const refC2 = push(cubagemRef);
+        await set(refC2, {
+          cavalo: cleanCavalo,
+          carreta: c2Placa,
+          m3: String(manualC2.m3).trim(),
+          mes: manualMes.trim(),
+          dia: manualDia.trim(),
+          data: manualData.trim(),
+          transportador: manualTransportador.trim(),
+          pallets: String(manualC2.pallets || '').trim(),
+          pbt: String(manualC2.pbt || '').trim(),
+          modeloCarreta: manualC2.modelo || 'SIDER',
+          tipoVeiculo: 'bitrem',
+          tag: 'C2',
+          inseridoEm: nowIso
+        });
+
+        // Sync com ordens_coleta
+        try {
+          const ordensRef = ref(db, 'ordens_coleta');
+          const newOrderRef = push(ordensRef);
+          await set(newOrderRef, {
+            placa_cavalo: cleanCavalo,
+            placa_carreta: `${c1Placa} / ${c2Placa}`,
+            volume_cubado: sumM3,
+            data: manualData.trim() || new Date().toLocaleDateString('pt-BR'),
+            transportador: manualTransportador.trim().toUpperCase(),
+            modelo_carreta: `${manualC1.modelo} / ${manualC2.modelo}`,
+            numero_pallets: sumPallets,
+            pbt: sumPbt,
+            tipo_veiculo: 'bitrem',
+            c1_placa: c1Placa,
+            c1_modelo: manualC1.modelo,
+            c1_volume: Number(manualC1.m3) || 0,
+            c1_pallets: Number(manualC1.pallets) || 0,
+            c1_pbt: Number(manualC1.pbt) || 0,
+            c2_placa: c2Placa,
+            c2_modelo: manualC2.modelo,
+            c2_volume: Number(manualC2.m3) || 0,
+            c2_pallets: Number(manualC2.pallets) || 0,
+            c2_pbt: Number(manualC2.pbt) || 0,
+            created_at: Date.now(),
+            created_by: currentUser || 'Operador',
+            origem_arquivo: 'Manual - Painel Cubagem'
+          });
+        } catch (e) {
+          console.warn("Sync com ordens_coleta:", e);
+        }
+
+        setManualCavalo('');
+        setManualCarreta('');
+        setManualM3('');
+        setManualMes('');
+        setManualDia('');
+        setManualData('');
+        setManualTransportador('');
+        setManualPallets('');
+        setManualPbt('');
+        setManualModeloCarreta('SIDER');
+        setManualC1({ placa: '', modelo: 'SIDER', m3: '', pallets: '', pbt: '' });
+        setManualC2({ placa: '', modelo: 'SIDER', m3: '', pallets: '', pbt: '' });
+        setCubagemStatusMsg({ type: 'success', text: `Bitrem (C1: ${manualC1.m3}m³ + C2: ${manualC2.m3}m³ = Total ${sumM3}m³) cadastrado com sucesso!` });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+      } catch (error) {
+        console.error("Erro ao adicionar cubagem bitrem:", error);
+        setCubagemStatusMsg({ type: 'error', text: 'Erro ao salvar cubagem bitrem.' });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+      }
+      return;
+    } else {
+      finalCarreta = manualCarreta.replace(/[\s-]/g, '').toUpperCase();
+      finalM3 = manualM3.trim();
+      finalPallets = manualPallets.trim();
+      finalPbt = manualPbt.trim();
+      finalModelo = manualModeloCarreta.trim();
+
+      if (!finalCarreta || !finalM3) {
+        setCubagemStatusMsg({ type: 'error', text: 'Preencha a Placa da Carreta e o Volume (M³).' });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+        return;
+      }
+
+      // Verificação de duplicidade de Carreta
+      const exists = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === finalCarreta);
+      if (exists) {
+        setCubagemStatusMsg({ type: 'error', text: `A Carreta ${finalCarreta} já possui cubagem cadastrada!` });
+        setTimeout(() => setCubagemStatusMsg(null), 4000);
+        return;
+      }
+
+      try {
+        const cubagemRef = ref(db, 'patio/cubagem');
+        const newItemRef = push(cubagemRef);
+        await set(newItemRef, {
+          cavalo: cleanCavalo,
+          carreta: finalCarreta,
+          m3: finalM3,
+          mes: manualMes.trim(),
+          dia: manualDia.trim(),
+          data: manualData.trim(),
+          transportador: manualTransportador.trim(),
+          pallets: finalPallets,
+          pbt: finalPbt,
+          modeloCarreta: finalModelo,
+          tipoVeiculo: 'simples',
+          inseridoEm: new Date().toISOString()
+        });
+
+        // Also sync with ordens_coleta in RTDB
+        try {
+          const ordensRef = ref(db, 'ordens_coleta');
+          const newOrderRef = push(ordensRef);
+          await set(newOrderRef, {
+            placa_cavalo: cleanCavalo,
+            placa_carreta: finalCarreta,
+            volume_cubado: Number(finalM3) || 0,
+            data: manualData.trim() || new Date().toLocaleDateString('pt-BR'),
+            transportador: manualTransportador.trim().toUpperCase(),
+            modelo_carreta: finalModelo.toUpperCase(),
+            numero_pallets: Number(finalPallets) || 0,
+            pbt: Number(finalPbt) || 0,
+            tipo_veiculo: 'simples',
+            created_at: Date.now(),
+            created_by: currentUser || 'Operador',
+            origem_arquivo: 'Manual - Painel Cubagem'
+          });
+        } catch (e) {
+          console.warn("Sync com ordens_coleta:", e);
+        }
+
+        setManualCavalo('');
+        setManualCarreta('');
+        setManualM3('');
+        setManualMes('');
+        setManualDia('');
+        setManualData('');
+        setManualTransportador('');
+        setManualPallets('');
+        setManualPbt('');
+        setManualModeloCarreta('SIDER');
+        setCubagemStatusMsg({ type: 'success', text: `Cubagem (${finalM3}m³) adicionada com sucesso!` });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+      } catch (error) {
+        console.error("Erro ao adicionar cubagem:", error);
+        setCubagemStatusMsg({ type: 'error', text: 'Erro ao salvar cubagem.' });
+        setTimeout(() => setCubagemStatusMsg(null), 3000);
+      }
     }
   };
 
@@ -1119,10 +1292,14 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
           continue; // PULE E NÃO PUXE
         }
         const word = finalWords[colIdx];
-        const cleanWord = word.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-        if (isPlate(cleanWord)) {
-          if (!platesInLine.includes(cleanWord)) {
-            platesInLine.push(cleanWord);
+        // Split by slash, comma, semicolon, plus if concatenated in a single cell (e.g. POG3455 / POL77666)
+        const subParts = word.split(/[/,;+&]/);
+        for (const sub of subParts) {
+          const cleanWord = sub.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+          if (isPlate(cleanWord)) {
+            if (!platesInLine.includes(cleanWord)) {
+              platesInLine.push(cleanWord);
+            }
           }
         }
       }
@@ -1133,7 +1310,7 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
       }
 
       const cavalo = platesInLine[0];
-      const carreta = platesInLine[1];
+      const carretaPlates = platesInLine.slice(1);
 
       let m3Value = '';
 
@@ -1212,42 +1389,63 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
         modeloCarretaValue = finalWords[modeloCarretaColIndex].trim();
       }
 
-      // Requer pelo menos 1 placa (carreta) e um valor de cubagem não-vazio
-      // Se a coluna m3Value estiver vazia, não importamos a placa! (Regra solicitada pelo usuário)
-      if (carreta && m3Value) {
-        // Verify duplicates
+      // Se é Bitrem/Rodotrem (2 ou mais carretas encontradas): separa rigorosamente em C1 e C2
+      if (carretaPlates.length >= 2 && m3Value) {
+        const parsed = parseBitremData({
+          cavalo,
+          carreta: carretaPlates.join(' / '),
+          m3: m3Value,
+          pallets: palletsValue,
+          pbt: pbtValue,
+          modeloCarreta: modeloCarretaValue,
+          data: dataValue,
+          transportador: transportadorValue
+        });
+
+        parsed.carretas.forEach(c => {
+          const cleanCarreta = c.placa.replace(/[\s-]/g, '').toUpperCase();
+          const existsInDb = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === cleanCarreta);
+          const isDuplicateInBatch = processedCarretasInBatch.has(cleanCarreta);
+
+          previewList.push({
+            cavalo,
+            carreta: c.placa,
+            m3: String(c.volume),
+            status: existsInDb || isDuplicateInBatch ? 'duplicate' : 'ready',
+            mes: mesValue,
+            dia: diaValue,
+            data: dataValue,
+            transportador: transportadorValue,
+            pallets: c.pallets !== '---' ? String(c.pallets) : '',
+            pbt: c.pbt !== '---' ? String(c.pbt) : '',
+            modeloCarreta: c.modelo
+          });
+
+          if (!existsInDb && !isDuplicateInBatch) {
+            processedCarretasInBatch.add(cleanCarreta);
+          }
+        });
+      } else if (carretaPlates.length === 1 && m3Value) {
+        const carreta = carretaPlates[0];
         const cleanCarreta = carreta.replace(/[\s-]/g, '').toUpperCase();
         const existsInDb = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === cleanCarreta);
         const isDuplicateInBatch = processedCarretasInBatch.has(cleanCarreta);
 
-        if (existsInDb || isDuplicateInBatch) {
-          previewList.push({ 
-            cavalo, 
-            carreta, 
-            m3: m3Value, 
-            status: 'duplicate',
-            mes: mesValue,
-            dia: diaValue,
-            data: dataValue,
-            transportador: transportadorValue,
-            pallets: palletsValue,
-            pbt: pbtValue,
-            modeloCarreta: modeloCarretaValue
-          });
-        } else {
-          previewList.push({ 
-            cavalo, 
-            carreta, 
-            m3: m3Value, 
-            status: 'ready',
-            mes: mesValue,
-            dia: diaValue,
-            data: dataValue,
-            transportador: transportadorValue,
-            pallets: palletsValue,
-            pbt: pbtValue,
-            modeloCarreta: modeloCarretaValue
-          });
+        previewList.push({ 
+          cavalo, 
+          carreta, 
+          m3: m3Value, 
+          status: existsInDb || isDuplicateInBatch ? 'duplicate' : 'ready',
+          mes: mesValue,
+          dia: diaValue,
+          data: dataValue,
+          transportador: transportadorValue,
+          pallets: palletsValue,
+          pbt: pbtValue,
+          modeloCarreta: modeloCarretaValue
+        });
+
+        if (!existsInDb && !isDuplicateInBatch) {
           processedCarretasInBatch.add(cleanCarreta);
         }
       } else {
@@ -2995,132 +3193,325 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                     {/* PDF IMPORT BOX REMOVED */}
 
                     {/* MANUAL ADDITION SECTION */}
-                    <form onSubmit={handleAddCubagemManual} className="bg-[#faf5ec] border border-[#d3c0a5] rounded-xl p-6 space-y-4 text-left shadow-sm relative overflow-hidden">
+                    <form onSubmit={handleAddCubagemManual} className="bg-[#faf5ec] border border-[#d3c0a5] rounded-xl p-5 space-y-4 text-left shadow-sm relative overflow-hidden">
                       <div className="absolute top-0 left-0 w-1.5 h-full bg-[#a9181a]" />
                       
-                      {/* Row 1: Cavalo & Carreta */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Placa Cavalo:</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: ABC1234"
-                            value={manualCavalo}
-                            onChange={(e) => setManualCavalo(e.target.value)}
-                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
-                          />
+                      {/* Top Toggle: Carreta Única vs Bitrem / Rodotrem */}
+                      <div className="bg-[#ebd9c3] p-1 rounded-xl border border-[#c2b19f] flex items-center gap-1 shadow-inner">
+                        <button
+                          type="button"
+                          onClick={() => setManualVehicleMode('simples')}
+                          className={cn(
+                            "flex-1 py-1.5 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                            manualVehicleMode === 'simples'
+                              ? "bg-[#8B0000] text-white shadow border border-[#ffd880]/30"
+                              : "text-[#311f14] hover:bg-[#dfcbaf]/60"
+                          )}
+                        >
+                          <Truck size={12} className="shrink-0" />
+                          <span>Carreta Única</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setManualVehicleMode('bitrem')}
+                          className={cn(
+                            "flex-1 py-1.5 px-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer",
+                            manualVehicleMode === 'bitrem'
+                              ? "bg-[#8B0000] text-white shadow border border-[#ffd880]/30"
+                              : "text-[#311f14] hover:bg-[#dfcbaf]/60"
+                          )}
+                        >
+                          <Boxes size={12} className="shrink-0" />
+                          <span>Bitrem / Rodotrem (C1 e C2)</span>
+                        </button>
+                      </div>
+
+                      {/* Shared Vehicle Fields: Cavalo, Data, Transportador */}
+                      <div className="bg-[#f5ecdd] border border-[#d3c0a5] rounded-xl p-3.5 space-y-3">
+                        <div className="text-[9px] font-black uppercase tracking-wider text-[#5c3c24] flex items-center gap-1">
+                          <Truck size={12} className="text-[#8B0000]" />
+                          <span>Dados Compartilhados do Veículo</span>
                         </div>
 
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-bold uppercase tracking-wider text-[#5c3c24] flex items-center gap-1">
-                            <Truck size={10} className="text-[#ca1a20] shrink-0" />
-                            <span>Placa Carreta:</span>
-                          </label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: XYZ9D87"
-                            value={manualCarreta}
-                            onChange={(e) => setManualCarreta(e.target.value)}
-                            className="w-full bg-[#fcfaf7] border border-[#5c3c24]/30 text-[#1c1109] text-xs font-black uppercase rounded-xl py-2 px-3 shadow-inner outline-none focus:ring-2 focus:ring-[#ca1a20]/20 focus:border-[#ca1a20] transition-colors"
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[8.5px] font-black uppercase tracking-wider text-[#311f14]">Placa Cavalo *</label>
+                            <input 
+                              type="text" 
+                              required
+                              placeholder="Ex: JAT4G68"
+                              value={manualCavalo}
+                              onChange={(e) => setManualCavalo(e.target.value.toUpperCase())}
+                              className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black uppercase rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[8.5px] font-black uppercase tracking-wider text-[#311f14]">Data</label>
+                            <input 
+                              type="text" 
+                              placeholder="Ex: 09/08/2026"
+                              value={manualData}
+                              onChange={(e) => setManualData(e.target.value)}
+                              className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                            />
+                          </div>
+
+                          <div className="flex flex-col gap-1">
+                            <label className="text-[8.5px] font-black uppercase tracking-wider text-[#311f14]">Transportador</label>
+                            <input 
+                              type="text" 
+                              placeholder="Ex: MOEDENSE"
+                              value={manualTransportador}
+                              onChange={(e) => setManualTransportador(e.target.value.toUpperCase())}
+                              className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black uppercase rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                            />
+                          </div>
                         </div>
                       </div>
 
-                      {/* Row 2: Volume Cubado & Data */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Volume Cubado (M³):</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: 94"
-                            value={manualM3}
-                            onChange={(e) => setManualM3(e.target.value)}
-                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
-                          />
-                        </div>
+                      {/* Mode: Carreta Única */}
+                      {manualVehicleMode === 'simples' ? (
+                        <div className="bg-[#f5ecdd] border border-[#d3c0a5] rounded-xl p-3.5 space-y-3">
+                          <div className="text-[9px] font-black uppercase tracking-wider text-[#5c3c24]">Carreta Única</div>
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[8.5px] font-black uppercase tracking-wider text-[#311f14]">Placa Carreta *</label>
+                              <input 
+                                type="text" 
+                                required
+                                placeholder="Ex: FQC2B85"
+                                value={manualCarreta}
+                                onChange={(e) => setManualCarreta(e.target.value.toUpperCase())}
+                                className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black uppercase rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                              />
+                            </div>
 
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Data:</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: 02/01"
-                            value={manualData}
-                            onChange={(e) => setManualData(e.target.value)}
-                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
-                          />
-                        </div>
-                      </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[8.5px] font-black uppercase tracking-wider text-[#311f14]">Modelo Carreta</label>
+                              <input 
+                                type="text" 
+                                placeholder="Ex: SIDER"
+                                value={manualModeloCarreta}
+                                onChange={(e) => setManualModeloCarreta(e.target.value.toUpperCase())}
+                                className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black uppercase rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                              />
+                            </div>
 
-                      {/* Row 3: Transportador & Modelo Carreta */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Transportador:</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: COMBOIO"
-                            value={manualTransportador}
-                            onChange={(e) => setManualTransportador(e.target.value)}
-                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
-                          />
-                        </div>
+                            <div className="flex flex-col gap-1">
+                              <label className="text-[8.5px] font-black uppercase tracking-wider text-[#8B0000]">Volume Cubado (M³) *</label>
+                              <input 
+                                type="text" 
+                                required
+                                placeholder="Ex: 94"
+                                value={manualM3}
+                                onChange={(e) => setManualM3(e.target.value)}
+                                className="w-full bg-white border-2 border-[#8B0000]/30 text-[#8B0000] text-xs font-black rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                              />
+                            </div>
 
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Modelo Carreta:</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: BAÚ"
-                            value={manualModeloCarreta}
-                            onChange={(e) => setManualModeloCarreta(e.target.value)}
-                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
-                          />
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[8.5px] font-black uppercase tracking-wider text-[#311f14]">Nº Pallets</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Ex: 24"
+                                  value={manualPallets}
+                                  onChange={(e) => setManualPallets(e.target.value)}
+                                  className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black rounded-lg py-2 px-2 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-1">
+                                <label className="text-[8.5px] font-black uppercase tracking-wider text-[#311f14]">PBT (Ton)</label>
+                                <input 
+                                  type="text" 
+                                  placeholder="Ex: 44"
+                                  value={manualPbt}
+                                  onChange={(e) => setManualPbt(e.target.value)}
+                                  className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black rounded-lg py-2 px-2 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
+                                />
+                              </div>
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                      ) : (
+                        /* Mode: Bitrem (C1 e C2) */
+                        <div className="space-y-3">
+                          {/* Carreta 1 (C1) */}
+                          <div className="bg-[#fbf5eb] border-2 border-[#a52a2a]/30 rounded-xl p-3 space-y-2">
+                            <div className="text-[9px] font-black uppercase tracking-wider text-[#8B0000] flex items-center justify-between border-b border-[#a52a2a]/20 pb-1">
+                              <span>Carreta 1 (C1)</span>
+                              {manualC1.placa && <span className="font-mono">{manualC1.placa}</span>}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="flex flex-col gap-0.5">
+                                <label className="text-[8px] font-black uppercase text-[#311f14]">Placa C1 *</label>
+                                <input 
+                                  type="text"
+                                  required
+                                  placeholder="Ex: FQC2B85"
+                                  value={manualC1.placa}
+                                  onChange={e => setManualC1({ ...manualC1, placa: e.target.value.toUpperCase() })}
+                                  className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-lg py-1.5 px-2.5 outline-none focus:border-[#8B0000]"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <label className="text-[8px] font-black uppercase text-[#311f14]">Modelo C1</label>
+                                <input 
+                                  type="text"
+                                  placeholder="Ex: SIDER"
+                                  value={manualC1.modelo}
+                                  onChange={e => setManualC1({ ...manualC1, modelo: e.target.value.toUpperCase() })}
+                                  className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-lg py-1.5 px-2.5 outline-none focus:border-[#8B0000]"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <label className="text-[8px] font-black uppercase text-[#8B0000]">Volume C1 (M³) *</label>
+                                <input 
+                                  type="number"
+                                  placeholder="Ex: 88"
+                                  value={manualC1.m3}
+                                  onChange={e => setManualC1({ ...manualC1, m3: e.target.value })}
+                                  className="w-full bg-white border-2 border-[#8B0000]/30 text-[#8B0000] text-[11px] font-black rounded-lg py-1.5 px-2.5 outline-none focus:border-[#8B0000]"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[8px] font-black uppercase text-[#311f14]">Pallets C1</label>
+                                  <input 
+                                    type="number"
+                                    placeholder="12"
+                                    value={manualC1.pallets}
+                                    onChange={e => setManualC1({ ...manualC1, pallets: e.target.value })}
+                                    className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-lg py-1.5 px-2 outline-none"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[8px] font-black uppercase text-[#311f14]">PBT C1</label>
+                                  <input 
+                                    type="number"
+                                    placeholder="22"
+                                    value={manualC1.pbt}
+                                    onChange={e => setManualC1({ ...manualC1, pbt: e.target.value })}
+                                    className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-lg py-1.5 px-2 outline-none"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
-                      {/* Row 4: Nº Pallets & PBT (Ton) */}
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">Nº Pallets:</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: 24"
-                            value={manualPallets}
-                            onChange={(e) => setManualPallets(e.target.value)}
-                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
-                          />
-                        </div>
+                          {/* Carreta 2 (C2) */}
+                          <div className="bg-[#fbf5eb] border-2 border-[#a52a2a]/30 rounded-xl p-3 space-y-2">
+                            <div className="text-[9px] font-black uppercase tracking-wider text-[#8B0000] flex items-center justify-between border-b border-[#a52a2a]/20 pb-1">
+                              <span>Carreta 2 (C2)</span>
+                              {manualC2.placa && <span className="font-mono">{manualC2.placa}</span>}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div className="flex flex-col gap-0.5">
+                                <label className="text-[8px] font-black uppercase text-[#311f14]">Placa C2 *</label>
+                                <input 
+                                  type="text"
+                                  required
+                                  placeholder="Ex: FQG1D53"
+                                  value={manualC2.placa}
+                                  onChange={e => setManualC2({ ...manualC2, placa: e.target.value.toUpperCase() })}
+                                  className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-lg py-1.5 px-2.5 outline-none focus:border-[#8B0000]"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <label className="text-[8px] font-black uppercase text-[#311f14]">Modelo C2</label>
+                                <input 
+                                  type="text"
+                                  placeholder="Ex: SIDER"
+                                  value={manualC2.modelo}
+                                  onChange={e => setManualC2({ ...manualC2, modelo: e.target.value.toUpperCase() })}
+                                  className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black uppercase rounded-lg py-1.5 px-2.5 outline-none focus:border-[#8B0000]"
+                                />
+                              </div>
+                              <div className="flex flex-col gap-0.5">
+                                <label className="text-[8px] font-black uppercase text-[#8B0000]">Volume C2 (M³) *</label>
+                                <input 
+                                  type="number"
+                                  placeholder="Ex: 87"
+                                  value={manualC2.m3}
+                                  onChange={e => setManualC2({ ...manualC2, m3: e.target.value })}
+                                  className="w-full bg-white border-2 border-[#8B0000]/30 text-[#8B0000] text-[11px] font-black rounded-lg py-1.5 px-2.5 outline-none focus:border-[#8B0000]"
+                                />
+                              </div>
+                              <div className="grid grid-cols-2 gap-1.5">
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[8px] font-black uppercase text-[#311f14]">Pallets C2</label>
+                                  <input 
+                                    type="number"
+                                    placeholder="12"
+                                    value={manualC2.pallets}
+                                    onChange={e => setManualC2({ ...manualC2, pallets: e.target.value })}
+                                    className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-lg py-1.5 px-2 outline-none"
+                                  />
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <label className="text-[8px] font-black uppercase text-[#311f14]">PBT C2</label>
+                                  <input 
+                                    type="number"
+                                    placeholder="22"
+                                    value={manualC2.pbt}
+                                    onChange={e => setManualC2({ ...manualC2, pbt: e.target.value })}
+                                    className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-lg py-1.5 px-2 outline-none"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
 
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-[9px] font-black uppercase tracking-wider text-[#311f14] pl-1">PBT (Ton):</label>
-                          <input 
-                            type="text" 
-                            placeholder="Ex: 24"
-                            value={manualPbt}
-                            onChange={(e) => setManualPbt(e.target.value)}
-                            className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-[11px] font-black rounded-full py-2.5 px-4 outline-none focus:ring-2 focus:ring-[#940a0b]/20 focus:border-[#940a0b] transition-colors"
-                          />
+                          {/* Auto-sum banner */}
+                          <div className="p-3 bg-[#2b180d] text-[#fdefd1] rounded-xl flex items-center justify-between border border-[#a68a6d]">
+                            <span className="text-[9px] font-black uppercase tracking-wider text-[#ffd880]">
+                              Soma C1 + C2:
+                            </span>
+                            <span className="text-sm font-mono font-black text-white">
+                              {(Number(manualC1.m3) || 0) + (Number(manualC2.m3) || 0)} m³
+                            </span>
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Live Mercosul Plate Preview inside the card */}
-                      {(manualCavalo.trim() || manualCarreta.trim()) && (
+                      {(manualCavalo.trim() || (manualVehicleMode === 'bitrem' ? (manualC1.placa || manualC2.placa) : manualCarreta.trim())) && (
                         <motion.div 
                           initial={{ opacity: 0, height: 0 }}
                           animate={{ opacity: 1, height: 'auto' }}
-                          className="bg-[#f0dfcc]/50 border border-[#d3c0a5] rounded-xl p-3 flex flex-col items-center justify-center gap-2 mt-3 select-none shadow-inner"
+                          className="bg-[#f0dfcc]/50 border border-[#d3c0a5] rounded-xl p-3 flex flex-col items-center justify-center gap-2 mt-2 select-none shadow-inner"
                         >
-                          <span className="text-[8.5px] font-black uppercase tracking-widest text-[#5c3c24]">Placas Digitadas (Padrão Mercosul)</span>
-                          <div className="flex gap-4 flex-wrap justify-center items-center">
+                          <span className="text-[8.5px] font-black uppercase tracking-widest text-[#5c3c24]">Placas Digitadas</span>
+                          <div className="flex gap-3 flex-wrap justify-center items-center">
                             {manualCavalo.trim() && (
                               <div className="flex flex-col items-center gap-1 shrink-0">
-                                <span className="text-[7.5px] font-bold uppercase tracking-wider text-[#5c3c24]/80">Cavalo</span>
+                                <span className="text-[7.5px] font-bold uppercase text-[#5c3c24]/80">Cavalo</span>
                                 <LicensePlate plate={manualCavalo} type="cavalo" />
                               </div>
                             )}
-                            {manualCarreta.trim() && (
-                              <div className="flex flex-col items-center gap-1 shrink-0">
-                                <span className="text-[7.5px] font-bold uppercase tracking-wider text-[#5c3c24]/80">Carreta</span>
-                                <LicensePlate plate={manualCarreta} type="carreta" />
-                              </div>
+                            {manualVehicleMode === 'simples' ? (
+                              manualCarreta.trim() && (
+                                <div className="flex flex-col items-center gap-1 shrink-0">
+                                  <span className="text-[7.5px] font-bold uppercase text-[#5c3c24]/80">Carreta</span>
+                                  <LicensePlate plate={manualCarreta} type="carreta" />
+                                </div>
+                              )
+                            ) : (
+                              <>
+                                {manualC1.placa.trim() && (
+                                  <div className="flex flex-col items-center gap-1 shrink-0">
+                                    <span className="text-[7.5px] font-bold uppercase text-[#5c3c24]/80">C1</span>
+                                    <LicensePlate plate={manualC1.placa} type="carreta" />
+                                  </div>
+                                )}
+                                {manualC2.placa.trim() && (
+                                  <div className="flex flex-col items-center gap-1 shrink-0">
+                                    <span className="text-[7.5px] font-bold uppercase text-[#5c3c24]/80">C2</span>
+                                    <LicensePlate plate={manualC2.placa} type="carreta" />
+                                  </div>
+                                )}
+                              </>
                             )}
                           </div>
                         </motion.div>
@@ -3638,325 +4029,40 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                             </tr>
                           </thead>
                           <tbody className="bg-white">
-                            {groupedFiltered.map(item => {
-                              const isEditing = editingCubagemId === item.id;
-                              return (
-                                <tr key={item.id} className="hover:bg-[#faf5ec] transition-colors border-b border-[#d3c0a5]">
-                                  {isEditing ? (
-                                    <>
-                                      {/* Data Edit */}
-                                      <td className="px-1.5 py-1.5">
-                                        <div className="space-y-1.5">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <input 
-                                              key={sub.id}
-                                              type="text"
-                                              value={sub.data || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].data = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              placeholder="Ex: 02/01"
-                                              className="w-full max-w-[65px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black outline-none"
-                                            />
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Transportador Edit */}
-                                      <td className="px-1.5 py-1.5 text-center align-middle">
-                                        <input 
-                                          type="text"
-                                          value={editingGroupItems[0]?.transportador || ''}
-                                          onChange={(e) => {
-                                            const updated = editingGroupItems.map(subItem => ({
-                                              ...subItem,
-                                              transportador: e.target.value
-                                            }));
-                                            setEditingGroupItems(updated);
-                                          }}
-                                          placeholder="Ex: COMBOIO"
-                                          className="w-full max-w-[95px] bg-white border-2 border-[#5c3c24]/40 text-[#1c1109] rounded px-1.5 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#5c3c24]/20 shadow-inner text-center"
-                                        />
-                                      </td>
-                                      {/* Cavalo Edit */}
-                                      <td className="px-3 py-1.5 bg-red-50/10 text-center">
-                                        <input 
-                                          type="text"
-                                          value={editingCavalo}
-                                          onChange={(e) => setEditingCavalo(e.target.value)}
-                                          className="w-full max-w-[100px] bg-white border-2 border-[#ca1a20]/40 text-[#1c1109] rounded px-2 py-1 text-xs font-black uppercase outline-none focus:ring-2 focus:ring-[#ca1a20]/30 shadow-inner text-center"
-                                        />
-                                      </td>
-                                      {/* Carreta Edit */}
-                                      <td className="px-1.5 py-1.5">
-                                        <div className="space-y-1.5">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <div key={sub.id} className="flex items-center gap-1">
-                                              <span className="text-[8px] font-black uppercase text-[#5c3c24]/60">
-                                                C{idx + 1}:
-                                              </span>
-                                              <input 
-                                                type="text"
-                                                value={sub.carreta}
-                                                onChange={(e) => {
-                                                  const updated = [...editingGroupItems];
-                                                  updated[idx].carreta = e.target.value;
-                                                  setEditingGroupItems(updated);
-                                                }}
-                                                className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black uppercase outline-none"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Modelo Carreta Edit */}
-                                      <td className="px-1.5 py-1.5">
-                                        <div className="space-y-1.5">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <input 
-                                              key={sub.id}
-                                              type="text"
-                                              value={sub.modeloCarreta || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].modeloCarreta = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              placeholder="Ex: BAÚ"
-                                              className="w-full max-w-[80px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black text-center outline-none"
-                                            />
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Pallets Edit */}
-                                      <td className="px-1.5 py-1.5">
-                                        <div className="space-y-1.5">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <input 
-                                              key={sub.id}
-                                              type="text"
-                                              value={sub.pallets || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].pallets = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              placeholder="Ex: 24"
-                                              className="w-full max-w-[40px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black text-center outline-none"
-                                            />
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* PBT Edit */}
-                                      <td className="px-1.5 py-1.5">
-                                        <div className="space-y-1.5">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <input 
-                                              key={sub.id}
-                                              type="text"
-                                              value={sub.pbt || ''}
-                                              onChange={(e) => {
-                                                const updated = [...editingGroupItems];
-                                                updated[idx].pbt = e.target.value;
-                                                setEditingGroupItems(updated);
-                                              }}
-                                              placeholder="Ex: 24"
-                                              className="w-full max-w-[40px] bg-[#fcfaf7] border border-[#5c3c24]/40 text-[#1c1109] rounded px-1 py-0.5 text-[10px] font-black text-center outline-none"
-                                            />
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Cubagem Edit */}
-                                      <td className="px-3 py-1.5 bg-emerald-50/10 text-center">
-                                        <div className="space-y-1.5 inline-block text-left">
-                                          {editingGroupItems.map((sub, idx) => (
-                                            <div key={sub.id} className="flex items-center gap-1">
-                                              <span className="text-[9px] font-black uppercase text-emerald-800">
-                                                C{idx + 1}:
-                                              </span>
-                                              <input 
-                                                type="text"
-                                                value={sub.m3}
-                                                onChange={(e) => {
-                                                  const updated = [...editingGroupItems];
-                                                  updated[idx].m3 = e.target.value;
-                                                  setEditingGroupItems(updated);
-                                                }}
-                                                className="w-full max-w-[70px] bg-white border-2 border-emerald-400/40 text-emerald-900 rounded px-1.5 py-1 text-xs font-black outline-none focus:ring-2 focus:ring-emerald-400/30 shadow-inner"
-                                              />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
-                                      <td className="px-2 py-2 text-center">
-                                        <div className="flex items-center justify-center gap-1">
-                                          <button 
-                                            type="button"
-                                            onClick={() => handleSaveEditCubagem(item.id)}
-                                            className="w-7 h-7 flex items-center justify-center bg-gradient-to-b from-[#ca1a20] to-[#800609] hover:from-[#e4252c] hover:to-[#990a0d] text-[#fdefd1] rounded-lg transition-colors shadow-sm cursor-pointer border border-[#ff3e47]/20"
-                                            title="Salvar"
-                                          >
-                                            <Save size={12} />
-                                          </button>
-                                          <button 
-                                            type="button"
-                                            onClick={handleCancelEditCubagem}
-                                            className="w-7 h-7 flex items-center justify-center bg-gradient-to-b from-[#5c3c24] to-[#3a2517] hover:from-[#734c2f] hover:to-[#4e321e] text-white rounded-lg transition-colors shadow-sm cursor-pointer border border-white/10"
-                                            title="Cancelar"
-                                          >
-                                            <X size={12} />
-                                          </button>
-                                        </div>
-                                      </td>
-                                    </>
-                                  ) : (
-                                    <>
-                                      {/* Data Column */}
-                                      <td className="px-1.5 py-2 font-bold text-[11px] text-[#1c1109] font-mono text-center align-middle border-r border-[#5c3c24]/10">
-                                        <div className="flex items-center justify-center min-h-[28px] h-full uppercase tracking-wide">
-                                          {item.items[0]?.data || '---'}
-                                        </div>
-                                      </td>
-                                      {/* Transportador Column */}
-                                      <td className="px-3 py-2 text-[12px] font-black text-[#1c1109] text-center align-middle border-r border-[#5c3c24]/10">
-                                        <div className="flex items-center justify-center min-h-[28px] h-full uppercase font-sans tracking-wide">
-                                          {item.items[0]?.transportador || '---'}
-                                        </div>
-                                      </td>
-                                      {/* Cavalo Column */}
-                                      <td className="px-3 py-2 bg-red-50/10 border-r border-[#5c3c24]/10 text-center">
-                                        <div className="flex justify-center">
-                                          <LicensePlate plate={item.cavalo} type="cavalo" size="md" />
-                                        </div>
-                                      </td>
-                                      {/* Carreta Column */}
-                                      <td className="px-1.5 py-2 border-r border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1">
-                                          {item.items.map((sub, idx) => (
-                                            <div key={sub.id} className="h-[28px] flex items-center gap-1">
-                                              {item.items.length > 1 && (
-                                                <span className="text-[7.5px] font-black uppercase tracking-wider text-[#5c3c24]/60 bg-[#5c3c24]/10 px-0.5 py-0.2 rounded shrink-0">
-                                                  C{idx + 1}
-                                                </span>
-                                              )}
-                                              <LicensePlate plate={sub.carreta} type="carreta" size="sm" />
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Modelo Carreta Column */}
-                                      <td className="px-3 py-2 text-[12px] font-black text-[#1c1109] text-center align-middle border-r border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1 items-center justify-center min-h-[28px] h-full uppercase font-sans tracking-wide">
-                                          {item.items.map((sub, idx) => {
-                                            const rawModel = (sub.modeloCarreta || '---').toUpperCase();
-                                            const formattedModel = rawModel.replace(/RODOTREM\s*|RODO\s*TREM\s*|RODOREM\s*/g, '').trim() || '---';
-                                            return (
-                                              <div key={sub.id} className="h-[28px] w-full flex items-center justify-center relative">
-                                                {item.items.length > 1 && (
-                                                  <span className="text-[7.5px] font-black uppercase tracking-wider text-[#5c3c24]/60 bg-[#5c3c24]/10 px-0.5 py-0.2 rounded shrink-0 absolute left-0">
-                                                    C{idx + 1}
-                                                  </span>
-                                                )}
-                                                <span>{formattedModel}</span>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                      </td>
-                                      {/* Nº Pallets Column */}
-                                      <td className="px-1.5 py-2 text-[10.5px] font-mono font-bold text-center border-r border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1 items-center">
-                                          {item.items.map((sub) => (
-                                            <div key={sub.id} className="h-[28px] flex items-center justify-center">
-                                              <span className="bg-amber-100/60 border border-amber-300/60 rounded px-1.5 py-0.5 text-[#5c3c24]">
-                                                {sub.pallets || '---'}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* PBT Column */}
-                                      <td className="px-1.5 py-2 text-[10.5px] font-mono font-bold text-center border-r border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1 items-center">
-                                          {item.items.map((sub) => (
-                                            <div key={sub.id} className="h-[28px] flex items-center justify-center">
-                                              <span className="bg-stone-100 border border-stone-300 rounded px-1.5 py-0.5 text-stone-700 font-medium">
-                                                {sub.pbt || '---'}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </td>
-                                      {/* Cubagem Column */}
-                                      <td className="px-3 py-2 bg-emerald-50/10 border-x border-[#5c3c24]/10">
-                                        <div className="flex flex-col gap-1.5 items-center">
-                                          {item.items.map((sub, idx) => (
-                                            <div key={sub.id} className="h-[28px] flex items-center gap-1">
-                                              {item.items.length > 1 && (
-                                                <span className="text-[7.5px] font-black uppercase tracking-wider text-emerald-800 bg-emerald-100 px-1 py-0.5 rounded font-sans shrink-0">
-                                                  C{idx + 1}
-                                                </span>
-                                              )}
-                                              <div className="inline-flex items-center px-3 py-1 bg-emerald-100 border-2 border-emerald-400 rounded-full text-emerald-900 font-black font-mono text-[13px] shadow-[0_2px_4px_rgba(0,0,0,0.1)] hover:scale-105 transition-transform">
-                                                {sub.m3} M³
-                                              </div>
-                                            </div>
-                                          ))}
-                                          {item.items.length > 1 && (
-                                            <div className="pt-1 mt-1 border-t-2 border-[#5c3c24]/15 flex items-center gap-1.5 w-full justify-center">
-                                              <span className="text-[9px] font-black text-[#8c060a] uppercase tracking-wider font-sans">Total:</span>
-                                              <span className="text-[12px] font-black text-[#8c060a] font-mono bg-amber-100 border-2 border-amber-300 px-2 py-0.5 rounded-lg shadow-sm">
-                                                {item.items.reduce((sum, sub) => sum + (parseFloat(sub.m3) || 0), 0)} M³
-                                              </span>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </td>
-                                      {!isReadOnly && (
-                                        <td className="px-1.5 py-2 text-center">
-                                          <div className="flex items-center justify-center gap-1">
-                                            <button 
-                                              type="button"
-                                              onClick={() => {
-                                                setEditingCubagemId(item.id);
-                                                setEditingCavalo(item.cavalo);
-                                                setEditingGroupItems(item.items.map(sub => ({ 
-                                                  id: sub.id, 
-                                                  carreta: sub.carreta, 
-                                                  m3: sub.m3,
-                                                  mes: sub.mes || '',
-                                                  dia: sub.dia || '',
-                                                  data: sub.data || '',
-                                                  transportador: sub.transportador || '',
-                                                  pallets: sub.pallets || '',
-                                                  pbt: sub.pbt || '',
-                                                  modeloCarreta: sub.modeloCarreta || ''
-                                                })));
-                                              }}
-                                              className="w-7 h-7 flex items-center justify-center bg-white text-[#5c3c24] hover:bg-[#ca1a20]/10 hover:text-[#ca1a20] rounded-lg transition-all border border-[#5c3c24]/30 shadow-sm cursor-pointer hover:scale-105"
-                                              title="Editar Registro"
-                                            >
-                                              <Edit size={12} />
-                                            </button>
-                                            {isAdmin && (
-                                              <button 
-                                                type="button"
-                                                onClick={() => handleDeleteCubagem(item.items.map(sub => sub.id))}
-                                                className="w-7 h-7 flex items-center justify-center bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg transition-all border border-rose-300 shadow-sm cursor-pointer hover:scale-105"
-                                                title="Excluir Registro"
-                                              >
-                                                <Trash2 size={12} />
-                                              </button>
-                                            )}
-                                          </div>
-                                        </td>
-                                      )}
-                                    </>
-                                  )}
-                                </tr>
-                              );
-                            })}
+                            {groupedFiltered.map(item => (
+                              <CubagemTableRow
+                                key={item.id}
+                                item={item}
+                                isEditing={editingCubagemId === item.id}
+                                isReadOnly={!!isReadOnly}
+                                isAdmin={!!isAdmin}
+                                editingCavalo={editingCavalo}
+                                editingGroupItems={editingGroupItems}
+                                setEditingCavalo={setEditingCavalo}
+                                setEditingGroupItems={setEditingGroupItems}
+                                onStartEdit={() => {
+                                  setEditingCubagemId(item.id);
+                                  setEditingCavalo(item.cavalo);
+                                  setEditingGroupItems(item.items.map(sub => ({ 
+                                    id: sub.id, 
+                                    cavalo: item.cavalo,
+                                    carreta: sub.carreta, 
+                                    m3: sub.m3,
+                                    mes: sub.mes || '',
+                                    dia: sub.dia || '',
+                                    data: sub.data || '',
+                                    transportador: sub.transportador || '',
+                                    pallets: sub.pallets || '',
+                                    pbt: sub.pbt || '',
+                                    modeloCarreta: sub.modeloCarreta || '',
+                                    inseridoEm: sub.inseridoEm || item.inseridoEm
+                                  })));
+                                }}
+                                onSaveEdit={() => handleSaveEditCubagem(item.id)}
+                                onCancelEdit={handleCancelEditCubagem}
+                                onDelete={(ids) => handleDeleteCubagem(ids)}
+                              />
+                            ))}
                           </tbody>
                         </table>
                       </div>
@@ -4174,11 +4280,16 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                                       </div>
 
                                       <div className="flex flex-col gap-1.5">
-                                        <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Carretas</span>
-                                        <div className="flex flex-wrap gap-2">
+                                        <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Carreta(s)</span>
+                                        <div className="flex flex-col gap-1.5">
                                           {item.items.map((sub, idx) => (
-                                            <div key={sub.id} className="flex flex-col gap-0.5">
-                                              <LicensePlate plate={sub.carreta} type="carreta" />
+                                            <div key={sub.id} className="flex items-center gap-1.5">
+                                              {item.items.length > 1 && (
+                                                <span className="text-[8px] font-black uppercase text-[#8B0000] bg-[#f8d7da] border border-[#f5c6cb] px-1 py-0.5 rounded font-sans shrink-0">
+                                                  C{idx + 1}
+                                                </span>
+                                              )}
+                                              <LicensePlate plate={sub.carreta} type="carreta" size="sm" />
                                             </div>
                                           ))}
                                         </div>

@@ -25,7 +25,8 @@
     "react-dom": "^19.2.6",
     "recharts": "^3.8.1",
     "tailwind-merge": "^3.6.0",
-    "tesseract.js": "^7.0.0"
+    "tesseract.js": "^7.0.0",
+    "xlsx": "^0.18.5"
   },
   "overrides": {
     "node-domexception": "1.0.0"

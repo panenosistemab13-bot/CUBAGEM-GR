@@ -4,7 +4,8 @@ import {
   Map, 
   ChevronLeft,
   ChevronRight,
-  Boxes
+  Boxes,
+  FileSpreadsheet
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { toAbsoluteUrl } from '../utils/url';
@@ -21,6 +22,7 @@ interface MenuItem {
 
 const menuItems: MenuItem[] = [
   { id: 'cubagem', label: 'Cubagem', buttonLabel: 'Volumes', icon: Boxes, color: 'text-zinc-300', description: 'Gerenciamento de cubagem e volumes de veículos.' },
+  { id: 'ordem_coleta', label: 'Ordem de Coleta', buttonLabel: 'Coletas', icon: FileSpreadsheet, color: 'text-zinc-300', description: 'Leitura automática de Excel/PDF e gestão de ordens.' },
   { id: 'rotas', label: 'Rotas', buttonLabel: 'Logística', icon: Map, color: 'text-zinc-300', description: 'Otimização e códigos de rotas operacionais.' },
 ];
 
@@ -160,6 +162,29 @@ function ModuleGraphic({ id }: { id: string }) {
           {/* Yellow warning hazard decal */}
           <polygon points="115,75 130,68 135,71 120,78" fill="#ecc94b" />
           <polygon points="118,74 122,72 125,75 121,77" fill="#1a202c" />
+        </svg>
+      );
+
+    case 'ordem_coleta':
+      // Glowing 3D Ledger / Document Folio with Golden Seal & Spreadsheet Grid
+      return (
+        <svg viewBox="0 0 200 200" className="w-40 h-40 drop-shadow-[0_12px_18px_rgba(0,0,0,0.7)]">
+          <ellipse cx="100" cy="160" rx="55" ry="12" fill="rgba(0,0,0,0.4)" filter="blur(8px)" />
+          {/* Isometric Ledger Book / Document binder */}
+          <polygon points="45,115 100,140 100,75 45,50" fill="#1b5e20" />
+          <polygon points="100,140 155,115 155,50 100,75" fill="#2e7d32" />
+          <polygon points="45,50 100,75 155,50 100,25" fill="#4caf50" />
+
+          {/* Document Sheet overlay */}
+          <polygon points="106,132 148,111 148,58 106,79" fill="#f9fbe7" />
+          <line x1="112" y1="84" x2="142" y2="69" stroke="#33691e" strokeWidth="2" />
+          <line x1="112" y1="94" x2="142" y2="79" stroke="#558b2f" strokeWidth="1.5" />
+          <line x1="112" y1="104" x2="142" y2="89" stroke="#558b2f" strokeWidth="1.5" />
+          <line x1="112" y1="114" x2="142" y2="99" stroke="#558b2f" strokeWidth="1.5" />
+
+          {/* Red Seal */}
+          <circle cx="138" cy="106" r="7" fill="#b71c1c" stroke="#ffe082" strokeWidth="1" />
+          <text x="135" y="109" fill="#fff" fontSize="8" fontWeight="bold">✓</text>
         </svg>
       );
 

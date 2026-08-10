@@ -37,21 +37,25 @@ interface Appointment {
 }
 import Rotas from './components/Rotas';
 import Patio from './components/Patio';
+import OrdemColeta from './components/OrdemColeta';
 import { useCurrentPrinciple, PRINCIPLES_OF_LEADERSHIP } from './utils/principles';
 import { toAbsoluteUrl } from './utils/url';
 import coffeeBg from './assets/images/coffee_rustic_bg_1780760486326.png';
 import coffeeShopBg from './assets/images/coffee_shop_bg_1780921585218.png';
+import { FileSpreadsheet } from 'lucide-react';
 
-type Tab = 'menu' | 'rotas' | 'cubagem';
+type Tab = 'menu' | 'rotas' | 'cubagem' | 'ordem_coleta';
 
 const backgroundImages: Record<Tab, string> = {
   menu: '', // Empty for pure dark background
   rotas: toAbsoluteUrl(coffeeBg), // Premium rustic coffee setup
   cubagem: '', // Replaced with inline background in Patio.tsx
+  ordem_coleta: '',
 };
 
 const tabs = [
   { id: 'cubagem', label: 'Cubagem', icon: Database },
+  { id: 'ordem_coleta', label: 'Ordem de Coleta', icon: FileSpreadsheet },
 ];
 
 function Screw({ className }: { className?: string }) {
@@ -177,6 +181,8 @@ export default function App() {
     switch (activeTab) {
       case 'cubagem':
         return <Patio isReadOnly={currentUser === 'PCP'} currentUser={currentUser || undefined} />;
+      case 'ordem_coleta':
+        return <OrdemColeta isReadOnly={currentUser === 'PCP'} currentUser={currentUser || undefined} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center p-20 text-zinc-500">
@@ -302,8 +308,35 @@ export default function App() {
               </div>
             </div>
 
-            {/* Centered Navigation Spacer */}
-            <div className="flex-1 hidden lg:flex justify-center pointer-events-auto" />
+            {/* Centered Navigation Tabs */}
+            <div className="flex-1 flex justify-center pointer-events-auto">
+              <div className="flex items-center gap-1.5 p-1 bg-[#E8D4B0] border-2 border-[#3A2414] rounded-full shadow-md">
+                <button
+                  onClick={() => setActiveTab('cubagem')}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer",
+                    activeTab === 'cubagem'
+                      ? "bg-[#B32025] text-white shadow-sm"
+                      : "text-[#3A2414] hover:bg-[#d8c39e]"
+                  )}
+                >
+                  <Database size={13} className="stroke-[2.5]" />
+                  <span>Cubagem</span>
+                </button>
+                <button
+                  onClick={() => setActiveTab('ordem_coleta')}
+                  className={cn(
+                    "px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer",
+                    activeTab === 'ordem_coleta'
+                      ? "bg-[#B32025] text-white shadow-sm"
+                      : "text-[#3A2414] hover:bg-[#d8c39e]"
+                  )}
+                >
+                  <FileSpreadsheet size={13} className="stroke-[2.5]" />
+                  <span>Ordem de Coleta</span>
+                </button>
+              </div>
+            </div>
 
             <div className="flex items-center justify-end gap-8 w-1/4 pointer-events-auto">
                {/* Dynamic Breadcrumb (Hidden by request) */}
