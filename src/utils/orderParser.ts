@@ -1,5 +1,26 @@
 import * as XLSX from 'xlsx';
+import * as pdfjsLib from 'pdfjs-dist';
 import { ParseOrderResult } from '../types';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
+export async function extractTextFromPdfArrayBuffer(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdfDoc = await loadingTask.promise;
+    let fullText = '';
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    return fullText;
+  } catch (err) {
+    console.error('Error parsing PDF arrayBuffer with pdfjs:', err);
+    return '';
+  }
+}
 
 // Helper to normalize plate (ABC1234 or ABC1D23)
 export function normalizePlate(str: string): string {
@@ -1193,6 +1214,7 @@ export function parseLocalTextOrder(textContent: string): ParseOrderResult {
   const allPlates = (textContent.match(PLATE_SEARCH_REGEX) || []).map(p => normalizePlate(p)).filter(Boolean);
   const uniquePlates = Array.from(new Set(allPlates));
 
+  // Default intelligent assignment for 3C orders (Cavalo first, Carreta1 second, Carreta2 third)
   if (!placaCavalo && uniquePlates.length > 0) {
     placaCavalo = uniquePlates[0];
   }

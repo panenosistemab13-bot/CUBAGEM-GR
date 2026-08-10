@@ -34,6 +34,7 @@ import { OrdemColetaItem, CarretaSubItem } from '../types';
 import { 
   parseExcelOrder, 
   parseLocalTextOrder,
+  extractTextFromPdfArrayBuffer,
   createEmptyOrder, 
   normalizePlate, 
   normalizeOrdemColetaItem,
@@ -306,24 +307,20 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
       } else if (isPdf || isImage) {
         setProcessingMsg('Processando documento 100% localmente no navegador...');
         
-        // Read file as text or ArrayBuffer / DataURL to extract text locally
-        const textContent = await new Promise<string>((resolve) => {
+        const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
           const reader = new FileReader();
-          reader.onload = (e) => {
-            const res = e.target?.result;
-            if (typeof res === 'string') {
-              resolve(res);
-            } else if (res instanceof ArrayBuffer) {
-              // Convert buffer to string or extract readable chars
-              const decoder = new TextDecoder('utf-8');
-              resolve(decoder.decode(res));
-            } else {
-              resolve('');
-            }
-          };
-          reader.onerror = () => resolve('');
-          reader.readAsText(file);
+          reader.onload = (e) => resolve(e.target?.result as ArrayBuffer);
+          reader.onerror = reject;
+          reader.readAsArrayBuffer(file);
         });
+
+        let textContent = '';
+        if (isPdf) {
+          textContent = await extractTextFromPdfArrayBuffer(arrayBuffer);
+        } else {
+          const decoder = new TextDecoder('utf-8');
+          textContent = decoder.decode(arrayBuffer);
+        }
 
         const d = parseLocalTextOrder(file.name + ' ' + textContent);
 
