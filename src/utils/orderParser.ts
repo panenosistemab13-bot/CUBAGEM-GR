@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
 import { ParseOrderResult } from '../types';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 export async function extractTextFromPdfArrayBuffer(arrayBuffer: ArrayBuffer): Promise<string> {
   try {
@@ -1219,49 +1219,56 @@ export function parseLocalTextOrder(textContent: string): ParseOrderResult {
 
 export async function parsePDFLocal(file: File): Promise<ParseOrderResult | null> {
   try {
-    const reader = new FileReader();
-    const base64Promise = new Promise<string>((resolve, reject) => {
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-    const fileBase64 = await base64Promise;
-
-    const response = await fetch('/api/parse-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fileBase64 })
-    });
-
-    if (!response.ok) {
-      throw new Error('Falha ao processar PDF no servidor.');
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const pdfDoc = await loadingTask.promise;
+    
+    let fullText = '';
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += ' ' + pageText;
     }
 
-    const resData = await response.json();
-    if (!resData.success) {
-      throw new Error(resData.error || 'Erro ao extrair dados do PDF.');
-    }
+    console.log("Texto extraído localmente do PDF:", fullText);
 
-    const d = resData;
-    const temDuasCarretas = Boolean(d.placa_c2 && d.placa_c2 !== d.placa_c1);
-    const pallets = parseInt(d.pallets, 10) || 28;
-    const pbt = parseFloat(d.pbt) || 30;
+    const placas = fullText.match(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/gi) || [];
+    const placasUnicas = [...new Set(placas.map(p => p.toUpperCase()))].filter(p => isValidPlate(p));
+
+    const matchData = fullText.match(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/);
+    
+    let transportador = 'TRANSMAGNA';
+    if (/TRANSMAGNA/i.test(fullText)) transportador = 'TRANSMAGNA';
+    else if (/MOEDENSE/i.test(fullText)) transportador = 'MOEDENSE';
+    else if (/FROTA/i.test(fullText)) transportador = 'FROTA';
+
+    const matchPallets = fullText.match(/CAPACIDADE\s*PALLETS[^\d]*(\d+)/i) || fullText.match(/PALLETS[^\d]*(\d+)/i);
+    const matchTon = fullText.match(/CAPACIDADE\s*TONELADAS[^\d]*(\d+)/i) || fullText.match(/TONELADAS[^\d]*(\d+)/i);
+
+    const placaCavalo = placasUnicas[0] || '';
+    const placaC1 = placasUnicas[1] || '';
+    const placaC2 = placasUnicas[2] || '';
+    const temDuasCarretas = Boolean(placaC2 && placaC2 !== placaC1);
+    const pallets = matchPallets ? parseInt(matchPallets[1], 10) : 28;
+    const pbt = matchTon ? parseFloat(matchTon[1]) : 30;
+    const modelo = /BAU|BAÚ/i.test(fullText) ? 'BAU' : 'SIDER';
 
     return {
-      placa_cavalo: d.placa_cavalo || '',
-      placa_carreta: temDuasCarretas ? `${d.placa_c1} / ${d.placa_c2}` : d.placa_c1,
+      placa_cavalo: placaCavalo,
+      placa_carreta: temDuasCarretas ? `${placaC1} / ${placaC2}` : placaC1,
       tipo_veiculo: temDuasCarretas ? 'BITREM' : 'SINGLE',
-      modelo_carreta: d.modelo || 'SIDER',
+      modelo_carreta: modelo,
       volume_cubado: temDuasCarretas ? 175 : 90,
       numero_pallets: pallets,
       pbt: pbt,
-      data: d.data || new Date().toLocaleDateString('pt-BR'),
-      transportador: d.transportador || 'TRANSMAGNA',
-      c1: { placa: d.placa_c1, modelo: d.modelo || 'SIDER', volume: temDuasCarretas ? 87 : 90, pallets: temDuasCarretas ? Math.floor(pallets / 2) : pallets, pbt: temDuasCarretas ? Math.round(pbt / 2) : pbt },
-      c2: temDuasCarretas ? { placa: d.placa_c2, modelo: d.modelo || 'SIDER', volume: Math.round(pbt - 87), pallets: Math.ceil(pallets / 2), pbt: Math.round(pbt / 2) } : undefined
+      data: matchData ? matchData[1] : new Date().toLocaleDateString('pt-BR'),
+      transportador: transportador,
+      c1: { placa: placaC1, modelo: modelo, volume: temDuasCarretas ? 87 : 90, pallets: temDuasCarretas ? Math.floor(pallets / 2) : pallets, pbt: temDuasCarretas ? Math.round(pbt / 2) : pbt },
+      c2: temDuasCarretas ? { placa: placaC2, modelo: modelo, volume: Math.round(pbt - 87), pallets: Math.ceil(pallets / 2), pbt: Math.round(pbt / 2) } : undefined
     };
   } catch (err) {
-    console.error("Erro ao ler PDF via /api/parse-pdf:", err);
+    console.error("Erro ao ler PDF localmente:", err);
     return null;
   }
 }
