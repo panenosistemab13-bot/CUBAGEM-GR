@@ -29,7 +29,7 @@ import {
 import { ref, push, set, onValue, remove, update } from 'firebase/database';
 import { rtdb as db, handleFirestoreError, OperationType } from '../firebase';
 import { CubagemTableRow, CubagemRowItem, CubagemGroupedItem } from './CubagemTableRow';
-import { parseBitremData, formatDateInput } from '../utils/orderParser';
+import { parseBitremData } from '../utils/orderParser';
 
 interface PatioProps {
   onBack?: () => void;
@@ -3251,9 +3251,8 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                             <input 
                               type="text" 
                               placeholder="Ex: 09/08/2026"
-                              maxLength={10}
                               value={manualData}
-                              onChange={(e) => setManualData(formatDateInput(e.target.value))}
+                              onChange={(e) => setManualData(e.target.value)}
                               className="w-full bg-white border border-[#c2b19f] text-[#1c1109] text-xs font-black rounded-lg py-2 px-3 outline-none focus:ring-2 focus:ring-[#8B0000]/20 focus:border-[#8B0000] transition-colors"
                             />
                           </div>

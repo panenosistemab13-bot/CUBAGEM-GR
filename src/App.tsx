@@ -182,13 +182,7 @@ export default function App() {
       case 'cubagem':
         return <Patio isReadOnly={currentUser === 'PCP'} currentUser={currentUser || undefined} />;
       case 'ordem_coleta':
-        return (
-          <OrdemColeta
-            isReadOnly={currentUser === 'PCP'}
-            currentUser={currentUser || undefined}
-            onNavigateToCubagem={() => setActiveTab('cubagem')}
-          />
-        );
+        return <OrdemColeta isReadOnly={currentUser === 'PCP'} currentUser={currentUser || undefined} />;
       default:
         return (
           <div className="flex flex-col items-center justify-center p-20 text-zinc-500">

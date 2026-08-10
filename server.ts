@@ -6,8 +6,7 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { createRequire } from "module";
 
 const require = createRequire(import.meta.url);
-const pdfModule = require("pdf-parse");
-const pdfParseFunc = typeof pdfModule === 'function' ? pdfModule : (pdfModule.default || pdfModule);
+const pdf = require("pdf-parse");
 
 const app = express();
 const PORT = 3000;
@@ -157,7 +156,7 @@ async function startServer() {
         const buffer = Buffer.from(apenasBase64, 'base64');
 
         // Parse PDF locally
-        const data = await pdfParseFunc(buffer);
+        const data = await pdf(buffer);
         const text = data.text;
 
         if (!text) {
@@ -248,48 +247,6 @@ async function startServer() {
     }
   });
 
-  app.post("/api/parse-pdf", async (req, res) => {
-    try {
-      const { fileBase64 } = req.body;
-      if (!fileBase64) {
-        return res.status(400).json({ error: 'Arquivo não fornecido' });
-      }
-
-      const apenasBase64 = fileBase64.replace(/^data:[^;]+;base64,/, "");
-      const buffer = Buffer.from(apenasBase64, "base64");
-      const pdfData = await pdfParseFunc(buffer);
-      const fullText = pdfData.text || "";
-
-      const placas = fullText.match(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/gi) || [];
-      const placasUnicas = [...new Set(placas.map((p: string) => p.toUpperCase()))];
-
-      const matchData = fullText.match(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/);
-
-      let transportador = 'TRANSMAGNA';
-      if (/TRANSMAGNA/i.test(fullText)) transportador = 'TRANSMAGNA';
-      else if (/MOEDENSE/i.test(fullText)) transportador = 'MOEDENSE';
-      else if (/FROTA/i.test(fullText)) transportador = 'FROTA';
-
-      const matchPallets = fullText.match(/CAPACIDADE\s*PALLETS[^\d]*(\d+)/i) || fullText.match(/PALLETS[^\d]*(\d+)/i);
-      const matchTon = fullText.match(/CAPACIDADE\s*TONELADAS[^\d]*(\d+)/i) || fullText.match(/TONELADAS[^\d]*(\d+)/i);
-
-      return res.json({
-        success: true,
-        placa_cavalo: placasUnicas[0] || '',
-        placa_c1: placasUnicas[1] || '',
-        placa_c2: placasUnicas[2] || '',
-        data: matchData ? matchData[1] : new Date().toLocaleDateString('pt-BR'),
-        transportador,
-        pallets: matchPallets ? matchPallets[1] : '28',
-        pbt: matchTon ? matchTon[1] : '30',
-        modelo: /BAU|BAÚ/i.test(fullText) ? 'BAU' : 'SIDER'
-      });
-    } catch (error) {
-      console.error("Erro /api/parse-pdf:", error);
-      return res.status(500).json({ error: 'Erro ao processar PDF' });
-    }
-  });
-
   // Dedicated route for Ordem de Coleta parsing (PDF, Image, or OCR text)
   app.post("/api/parse-order", async (req, res) => {
     try {
@@ -302,7 +259,7 @@ async function startServer() {
         try {
           const apenasBase64 = fileBase64.replace(/^data:[^;]+;base64,/, "");
           const buffer = Buffer.from(apenasBase64, "base64");
-          const pdfData = await pdfParseFunc(buffer);
+          const pdfData = await pdf(buffer);
           textContent = pdfData.text || "";
         } catch (pdfErr) {
           console.warn("Aviso ao extrair texto com pdf-parse:", pdfErr);

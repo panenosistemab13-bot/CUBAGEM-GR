@@ -33,15 +33,11 @@ import { rtdb } from '../firebase';
 import { OrdemColetaItem, CarretaSubItem } from '../types';
 import { 
   parseExcelOrder, 
-  parseLocalTextOrder,
-  parsePDFLocal,
-  extractTextFromPdfArrayBuffer,
   createEmptyOrder, 
   normalizePlate, 
   normalizeOrdemColetaItem,
   isValidPlate,
-  parsePalletDistribution,
-  formatDateInput
+  parsePalletDistribution
 } from '../utils/orderParser';
 import { LicensePlate } from './LicensePlate';
 import { cn } from '../lib/utils';
@@ -49,7 +45,6 @@ import { cn } from '../lib/utils';
 interface OrdemColetaProps {
   currentUser?: string;
   isReadOnly?: boolean;
-  onNavigateToCubagem?: () => void;
 }
 
 // Slotted Vintage Flat-head Screw Component for authentic industrial look
@@ -66,7 +61,7 @@ function Screw({ className }: { className?: string }) {
   );
 }
 
-export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigateToCubagem }: OrdemColetaProps) {
+export default function OrdemColeta({ currentUser, isReadOnly = false }: OrdemColetaProps) {
   // Vehicle Mode: Carreta Única (SINGLE) vs Bitrem / Rodotrem (BITREM)
   const [vehicleMode, setVehicleMode] = useState<'SINGLE' | 'BITREM'>('SINGLE');
 
@@ -114,10 +109,21 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
   const [extractSuccessMsg, setExtractSuccessMsg] = useState<string | null>(null);
   const [extractDetails, setExtractDetails] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+
+  // Edit Modal State
+  const [editingItem, setEditingItem] = useState<OrdemColetaItem | null>(null);
+  const [editMode, setEditMode] = useState<'SINGLE' | 'BITREM'>('SINGLE');
+  const [editShared, setEditShared] = useState({ placa_cavalo: '', data: '', transportador: '' });
+  const [editC1, setEditC1] = useState({ placa: '', modelo: 'SIDER', volume: '' as string | number, pallets: '' as string | number, pbt: '' as string | number });
+  const [editC2, setEditC2] = useState({ placa: '', modelo: 'SIDER', volume: '' as string | number, pallets: '' as string | number, pbt: '' as string | number });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   // Realtime Database Items List
   const [ordersList, setOrdersList] = useState<OrdemColetaItem[]>([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -134,10 +140,16 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
     ? Number(((Number(c1.pbt) || 0) + (Number(c2.pbt) || 0)).toFixed(1))
     : (Number(c1.pbt) || 0);
 
+  // Auto-calculated Totals in Edit Modal
+  const totalVolumeEdit = editMode === 'BITREM'
+    ? (Number(editC1.volume) || 0) + (Number(editC2.volume) || 0)
+    : (Number(editC1.volume) || 0);
+
   // Subscribe to Firebase Realtime Database /ordens_coleta
   useEffect(() => {
     const ordersRef = ref(rtdb, 'ordens_coleta');
     const unsubscribe = onValue(ordersRef, (snapshot) => {
+      setLoadingOrders(false);
       const data = snapshot.val();
       if (data) {
         const loaded: OrdemColetaItem[] = Object.entries(data).map(([key, val]: [string, any]) => 
@@ -149,6 +161,7 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
       }
     }, (error) => {
       console.error("Erro ao ler ordens de coleta do Firebase:", error);
+      setLoadingOrders(false);
     });
 
     return () => unsubscribe();
@@ -232,12 +245,6 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
     setExtractDetails(null);
     setSelectedFileName(file.name);
 
-    // 2. LIMPEZA DE ESTADO ANTES DA IMPORTAÇÃO
-    setSharedData({ placa_cavalo: '', data: '', transportador: '' });
-    setC1({ placa: '', modelo: 'SIDER', volume: '', pallets: '', pbt: '' });
-    setC2({ placa: '', modelo: 'SIDER', volume: '', pallets: '', pbt: '' });
-    setVehicleMode('SINGLE');
-
     const fileNameLower = file.name.toLowerCase();
     const isExcel = fileNameLower.endsWith('.xlsx') || fileNameLower.endsWith('.xls') || fileNameLower.endsWith('.csv');
     const isPdf = fileNameLower.endsWith('.pdf');
@@ -306,76 +313,92 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
           setExtractDetails(`Cálculo de Volume: ${extracted.detalhes_calculo}`);
         }
       } else if (isPdf || isImage) {
-        setProcessingMsg('Processando documento 100% localmente no navegador...');
+        setProcessingMsg('Analisando documento com Inteligência Artificial e OCR...');
         
-        let d: any = null;
-        if (isPdf) {
-          d = await parsePDFLocal(file);
-        } else {
-          const arrayBuffer = await file.arrayBuffer();
-          const decoder = new TextDecoder('utf-8');
-          const textContent = decoder.decode(arrayBuffer);
-          d = parseLocalTextOrder(file.name + ' ' + textContent);
-        }
-
-        if (!d) {
-          throw new Error('Não foi possível extrair os dados do documento.');
-        }
-
-        const isBitremDetected = d.tipo_veiculo === 'BITREM' || 
-                                Boolean(d.c2 && d.c2.placa) || 
-                                Boolean(d.placa_carreta && d.placa_carreta.includes('/'));
-
-        setSharedData({
-          placa_cavalo: d.placa_cavalo || '',
-          data: d.data || new Date().toLocaleDateString('pt-BR'),
-          transportador: d.transportador || ''
+        // Convert to Base64
+        const reader = new FileReader();
+        const base64Promise = new Promise<string>((resolve, reject) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
         });
 
-        if (isBitremDetected) {
-          setVehicleMode('BITREM');
+        const fileBase64 = await base64Promise;
 
-          let dC1Pal = d.c1?.pallets;
-          let dC2Pal = d.c2?.pallets;
+        const response = await fetch('/api/parse-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileBase64,
+            mimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
+            fileName: file.name
+          })
+        });
 
-          if (dC1Pal === undefined || dC1Pal === '' || dC1Pal === null) {
-            const pDist = parsePalletDistribution(d.numero_pallets, true);
-            dC1Pal = pDist.c1Pallets;
-            dC2Pal = pDist.c2Pallets;
-          }
-
-          const modeloExtraidol = d.modelo_carreta || d.modelo || ( /BAU|BAÚ/i.test(JSON.stringify(d)) ? 'BAU' : 'SIDER');
-
-          setC1({
-            placa: d.c1?.placa || d.placa_c1 || d.placa_carreta?.split('/')[0]?.trim() || '',
-            modelo: d.c1?.modelo || modeloExtraidol,
-            volume: d.c1?.volume ?? Math.round((d.volume_cubado || 0) / 2),
-            pallets: dC1Pal ?? '',
-            pbt: d.c1?.pbt ?? Number(((d.pbt || 0) / 2).toFixed(1))
-          });
-          setC2({
-            placa: d.c2?.placa || d.placa_c2 || d.placa_carreta?.split('/')[1]?.trim() || '',
-            modelo: d.c2?.modelo || modeloExtraidol,
-            volume: d.c2?.volume ?? Math.round((d.volume_cubado || 0) - (Number(d.c1?.volume) || 0)),
-            pallets: dC2Pal ?? '',
-            pbt: d.c2?.pbt ?? Number(((d.pbt || 0) - (Number(d.c1?.pbt) || 0)).toFixed(1))
-          });
-        } else {
-          setVehicleMode('SINGLE');
-          const pDist = parsePalletDistribution(d.numero_pallets, false);
-          const modeloExtraidol = d.modelo_carreta || d.modelo || ( /BAU|BAÚ/i.test(JSON.stringify(d)) ? 'BAU' : 'SIDER');
-          
-          setC1({
-            placa: d.c1?.placa || d.placa_c1 || d.placa_carreta || '',
-            modelo: d.c1?.modelo || modeloExtraidol,
-            volume: (d.c1?.volume ?? d.volume_cubado) || '',
-            pallets: pDist.c1Pallets || d.numero_pallets || '',
-            pbt: (d.c1?.pbt ?? d.pbt) || ''
-          });
-          setC2({ placa: '', modelo: 'SIDER', volume: '', pallets: '', pbt: '' });
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(errData.error || 'Falha ao processar arquivo no servidor.');
         }
 
-        setExtractSuccessMsg(`Documento "${file.name}" processado localmente com sucesso!`);
+        const resData = await response.json();
+        if (resData.success && resData.data) {
+          const d = resData.data;
+
+          const isBitremDetected = d.tipo_veiculo === 'BITREM' || 
+                                  d.tipo_veiculo === 'bitrem' || 
+                                  Boolean(d.c2 && d.c2.placa) || 
+                                  Boolean(d.c2_placa && d.c2_placa.length > 0) || 
+                                  (d.placa_carreta && d.placa_carreta.includes('/'));
+
+          setSharedData({
+            placa_cavalo: d.placa_cavalo || '',
+            data: d.data || new Date().toLocaleDateString('pt-BR'),
+            transportador: d.transportador || ''
+          });
+
+          if (isBitremDetected) {
+            setVehicleMode('BITREM');
+
+            let dC1Pal = d.c1?.pallets ?? d.c1_pallets;
+            let dC2Pal = d.c2?.pallets ?? d.c2_pallets;
+
+            if (dC1Pal === undefined || dC1Pal === '' || dC1Pal === null) {
+              const pDist = parsePalletDistribution(d.capacidade_pallets ?? d.numero_pallets, true);
+              dC1Pal = pDist.c1Pallets;
+              dC2Pal = pDist.c2Pallets;
+            }
+
+            setC1({
+              placa: d.c1?.placa || d.c1_placa || d.placa_carreta.split('/')[0]?.trim() || '',
+              modelo: d.c1?.modelo || d.c1_modelo || d.modelo_carreta || 'SIDER',
+              volume: d.c1?.volume ?? d.c1_volume ?? Math.round((d.volume_cubado || 0) / 2) ?? '',
+              pallets: dC1Pal ?? '',
+              pbt: d.c1?.pbt ?? d.c1_pbt ?? Number(((d.pbt || 0) / 2).toFixed(1)) ?? ''
+            });
+            setC2({
+              placa: d.c2?.placa || d.c2_placa || d.placa_carreta.split('/')[1]?.trim() || '',
+              modelo: d.c2?.modelo || d.c2_modelo || d.modelo_carreta || 'SIDER',
+              volume: d.c2?.volume ?? d.c2_volume ?? Math.round((d.volume_cubado || 0) - (Number(d.c1?.volume) || 0)) ?? '',
+              pallets: dC2Pal ?? '',
+              pbt: d.c2?.pbt ?? d.c2_pbt ?? Number(((d.pbt || 0) - (Number(d.c1?.pbt) || 0)).toFixed(1)) ?? ''
+            });
+          } else {
+            setVehicleMode('SINGLE');
+            const pDist = parsePalletDistribution(d.capacidade_pallets ?? d.numero_pallets, false);
+            setC1({
+              placa: d.c1?.placa || d.placa_carreta || '',
+              modelo: d.c1?.modelo || d.modelo_carreta || 'SIDER',
+              volume: d.c1?.volume ?? d.volume_cubado ?? '',
+              pallets: pDist.c1Pallets || d.numero_pallets || '',
+              pbt: d.c1?.pbt ?? d.pbt ?? ''
+            });
+            setC2({ placa: '', modelo: 'SIDER', volume: '', pallets: '', pbt: '' });
+          }
+
+          setExtractSuccessMsg(`Documento "${file.name}" extraído com sucesso!`);
+        } else {
+          throw new Error('Nenhum dado legível retornado pelo analisador.');
+        }
       } else {
         throw new Error('Formato não suportado. Por favor envie arquivos Excel (.xlsx, .xls, .csv), PDF (.pdf) ou Imagens.');
       }
@@ -512,67 +535,18 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
       // Sync to patio/cubagem node
       try {
         const patioCubagemRef = ref(rtdb, 'patio/cubagem');
-        const nowIso = new Date().toISOString();
-        const dataParts = (finalData || '').split('/');
-        const diaStr = dataParts[0] || '';
-        const mesNum = dataParts[1] || '';
-        const meses = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-        const mesStr = mesNum ? (meses[parseInt(mesNum, 10) - 1] || '') : '';
-
-        if (isBitrem) {
-          // Save C1
-          const refC1 = push(patioCubagemRef);
-          await set(refC1, {
-            cavalo: finalCavalo,
-            carreta: c1Placa,
-            m3: String(c1Vol),
-            mes: mesStr,
-            dia: diaStr,
-            data: finalData,
-            transportador: finalTransp,
-            pallets: String(c1Pal),
-            pbt: String(c1Pbt),
-            modeloCarreta: c1Modelo,
-            tipoVeiculo: 'bitrem',
-            tag: 'C1',
-            inseridoEm: nowIso
-          });
-
-          // Save C2
-          const refC2 = push(patioCubagemRef);
-          await set(refC2, {
-            cavalo: finalCavalo,
-            carreta: c2Placa,
-            m3: String(c2Vol),
-            mes: mesStr,
-            dia: diaStr,
-            data: finalData,
-            transportador: finalTransp,
-            pallets: String(c2Pal),
-            pbt: String(c2Pbt),
-            modeloCarreta: c2Modelo,
-            tipoVeiculo: 'bitrem',
-            tag: 'C2',
-            inseridoEm: nowIso
-          });
-        } else {
-          // Single
-          const refSingle = push(patioCubagemRef);
-          await set(refSingle, {
-            cavalo: finalCavalo,
-            carreta: c1Placa,
-            m3: String(c1Vol),
-            mes: mesStr,
-            dia: diaStr,
-            data: finalData,
-            transportador: finalTransp,
-            pallets: String(c1Pal),
-            pbt: String(c1Pbt),
-            modeloCarreta: c1Modelo,
-            tipoVeiculo: 'simples',
-            inseridoEm: nowIso
-          });
-        }
+        const newPatioItemRef = push(patioCubagemRef);
+        await set(newPatioItemRef, {
+          cavalo: finalCavalo,
+          carreta: finalPlacaCarreta,
+          m3: String(finalVolumeTotal),
+          data: finalData,
+          transportador: finalTransp,
+          modeloCarreta: finalModeloCarreta,
+          pallets: String(finalPalletsTotal),
+          pbt: String(finalPbtTotal),
+          inseridoEm: new Date().toISOString()
+        });
       } catch (err) {
         console.warn("Sync com patio/cubagem:", err);
       }
@@ -590,11 +564,6 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
       setSelectedFileName(null);
       setExtractDetails(null);
 
-      // Redireciona imediatamente para a aba de Cubagem
-      if (onNavigateToCubagem) {
-        onNavigateToCubagem();
-      }
-
       setTimeout(() => {
         setExtractSuccessMsg(null);
       }, 5000);
@@ -607,30 +576,204 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
     }
   };
 
+  // Open Edit Modal for an order
+  const handleOpenEdit = (order: OrdemColetaItem) => {
+    setEditingItem(order);
+    const isBitrem = order.tipo_veiculo === 'BITREM' || order.tipo_veiculo === 'bitrem' || Boolean(order.c2 && order.c2.placa);
+    setEditMode(isBitrem ? 'BITREM' : 'SINGLE');
+    setEditShared({
+      placa_cavalo: order.placa_cavalo || '',
+      data: order.data || '',
+      transportador: order.transportador || ''
+    });
+    setEditC1({
+      placa: order.c1?.placa || '',
+      modelo: order.c1?.modelo || order.modelo_carreta || 'SIDER',
+      volume: order.c1?.volume ?? '',
+      pallets: order.c1?.pallets ?? '',
+      pbt: String(order.c1?.pbt || '').replace(/[^\d.,]/g, '')
+    });
+    setEditC2({
+      placa: order.c2?.placa || '',
+      modelo: order.c2?.modelo || order.modelo_carreta || 'SIDER',
+      volume: order.c2?.volume ?? '',
+      pallets: order.c2?.pallets ?? '',
+      pbt: String(order.c2?.pbt || '').replace(/[^\d.,]/g, '')
+    });
+  };
+
+  // Save Edit Modal
+  const handleSaveEdit = async () => {
+    if (!editingItem || !editingItem.id || isReadOnly) return;
+
+    const isBitrem = editMode === 'BITREM';
+    const finalCavalo = editShared.placa_cavalo.trim().toUpperCase();
+    const finalData = editShared.data.trim() || new Date().toLocaleDateString('pt-BR');
+    const finalTransp = editShared.transportador.trim().toUpperCase();
+
+    const c1Placa = editC1.placa.trim().toUpperCase();
+    const c1Modelo = editC1.modelo.trim().toUpperCase() || 'SIDER';
+    const c1Vol = Number(editC1.volume) || 0;
+    const c1Pbt = Number(editC1.pbt) || 0;
+
+    const rawEditC1Pal = String(editC1.pallets ?? '').trim();
+    const rawEditC2Pal = String(editC2.pallets ?? '').trim();
+    let c1Pal = 0;
+    let c2Pal = 0;
+
+    if (rawEditC1Pal.includes('/') || rawEditC1Pal.includes('\\') || rawEditC1Pal.includes('+')) {
+      const pDist = parsePalletDistribution(rawEditC1Pal, isBitrem);
+      c1Pal = pDist.c1Pallets;
+      c2Pal = pDist.c2Pallets;
+    } else {
+      c1Pal = Number(rawEditC1Pal) || 0;
+      c2Pal = Number(rawEditC2Pal) || 0;
+    }
+
+    const c2Placa = editC2.placa.trim().toUpperCase();
+    const c2Modelo = editC2.modelo.trim().toUpperCase() || 'SIDER';
+    const c2Vol = Number(editC2.volume) || 0;
+    const c2Pbt = Number(editC2.pbt) || 0;
+
+    if (!finalCavalo || !c1Placa) {
+      alert('Placa do Cavalo e Carreta 1 (C1) são obrigatórias.');
+      return;
+    }
+    if (!isValidPlate(finalCavalo)) {
+      alert(`A Placa do Cavalo "${finalCavalo}" é inválida. Deve seguir o padrão Mercosul ou Brasil (ex: JAT4G68 ou POD0566). Valores como "TRUCADO" não são aceitos.`);
+      return;
+    }
+    if (!isValidPlate(c1Placa)) {
+      alert(`A Placa da Carreta 1 "${c1Placa}" não corresponde a um padrão de placa válido.`);
+      return;
+    }
+    if (isBitrem && !c2Placa) {
+      alert('Placa da Carreta 2 (C2) é obrigatória para Bitrem.');
+      return;
+    }
+    if (isBitrem && !isValidPlate(c2Placa)) {
+      alert(`A Placa da Carreta 2 "${c2Placa}" não corresponde a um padrão de placa válido.`);
+      return;
+    }
+
+    const finalVol = isBitrem ? (c1Vol + c2Vol) : c1Vol;
+    const finalPal = isBitrem ? (c1Pal + c2Pal) : c1Pal;
+    const finalPbt = isBitrem ? Number((c1Pbt + c2Pbt).toFixed(1)) : c1Pbt;
+    const finalPlacaCarreta = isBitrem ? `${c1Placa} / ${c2Placa}` : c1Placa;
+    const finalModeloCarreta = isBitrem ? (c1Modelo === c2Modelo ? c1Modelo : `${c1Modelo} / ${c2Modelo}`) : c1Modelo;
+
+    setIsSavingEdit(true);
+    try {
+      const orderRef = ref(rtdb, `ordens_coleta/${editingItem.id}`);
+      await update(orderRef, {
+        tipo_veiculo: isBitrem ? "BITREM" : "SINGLE",
+        placa_cavalo: finalCavalo,
+        data: finalData,
+        transportador: finalTransp,
+        c1: {
+          placa: c1Placa,
+          modelo: c1Modelo,
+          pallets: c1Pal,
+          pbt: `${c1Pbt} T`,
+          volume: c1Vol
+        },
+        c2: isBitrem ? {
+          placa: c2Placa,
+          modelo: c2Modelo,
+          pallets: c2Pal,
+          pbt: `${c2Pbt} T`,
+          volume: c2Vol
+        } : null,
+        volume_total: finalVol,
+        placa_carreta: finalPlacaCarreta,
+        volume_cubado: finalVol,
+        modelo_carreta: finalModeloCarreta,
+        numero_pallets: finalPal,
+        pbt: finalPbt,
+        c1_placa: c1Placa,
+        c1_modelo: c1Modelo,
+        c1_volume: c1Vol,
+        c1_pallets: c1Pal,
+        c1_pbt: c1Pbt,
+        c2_placa: isBitrem ? c2Placa : null,
+        c2_modelo: isBitrem ? c2Modelo : null,
+        c2_volume: isBitrem ? c2Vol : null,
+        c2_pallets: isBitrem ? c2Pal : null,
+        c2_pbt: isBitrem ? c2Pbt : null,
+        updated_at: Date.now()
+      });
+
+      setEditingItem(null);
+    } catch (err: any) {
+      alert('Erro ao atualizar: ' + (err.message || ''));
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Delete an order
+  const handleDeleteOrder = async (id?: string) => {
+    if (!id || isReadOnly) return;
+    if (!window.confirm('Tem certeza que deseja excluir este registro de cubagem?')) return;
+
+    try {
+      await remove(ref(rtdb, `ordens_coleta/${id}`));
+    } catch (err: any) {
+      alert('Erro ao excluir: ' + (err.message || ''));
+    }
+  };
+
+  // Copy text to clipboard
+  const handleCopy = (order: OrdemColetaItem) => {
+    const isBitrem = order.tipo_veiculo === 'BITREM' || order.tipo_veiculo === 'bitrem' || Boolean(order.c2 && order.c2.placa);
+    const text = isBitrem
+      ? `Cavalo: ${order.placa_cavalo} | Data: ${order.data} | Transp: ${order.transportador} | C1: ${order.c1.placa} (${order.c1.volume}m³) | C2: ${order.c2?.placa} (${order.c2?.volume}m³) | Total: ${order.volume_total}m³`
+      : `Cavalo: ${order.placa_cavalo} | Data: ${order.data} | Transp: ${order.transportador} | Carreta: ${order.c1.placa} (${order.c1.volume}m³) | Total: ${order.volume_total}m³`;
+
+    navigator.clipboard.writeText(text);
+    setCopiedId(order.id || 'copied');
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   // Quick fill sample data with Bitrem example
   const handleFillSample = () => {
     setVehicleMode('BITREM');
     setSharedData({
-      placa_cavalo: 'JAT4G68',
+      placa_cavalo: 'POD0566',
       data: new Date().toLocaleDateString('pt-BR'),
-      transportador: 'MOEDENSE'
+      transportador: 'FROTA'
     });
     setC1({
-      placa: 'FQC2B85',
+      placa: 'P0G7766',
       modelo: 'SIDER',
       volume: 88,
       pallets: 24,
-      pbt: 22
+      pbt: 24
     });
     setC2({
-      placa: 'FQG1D53',
+      placa: 'P0Z2134',
       modelo: 'SIDER',
       volume: 87,
       pallets: 24,
-      pbt: 22
+      pbt: 24
     });
-    setExtractSuccessMsg('Dados de exemplo Bitrem (Cavalo: JAT4G68 | C1: FQC2B85 - 88 m³ / 24 plt | C2: FQG1D53 - 87 m³ / 24 plt | Total: 175 m³) preenchidos com sucesso!');
+    setExtractSuccessMsg('Dados de exemplo Bitrem (C1 = 88 m³, C2 = 87 m³ | Total: 175 m³) preenchidos com sucesso!');
   };
+
+  // Filtered orders
+  const filteredOrders = ordersList.filter(item => {
+    const q = searchTerm.toLowerCase();
+    const c1Match = item.c1 && (item.c1.placa.toLowerCase().includes(q) || item.c1.modelo.toLowerCase().includes(q));
+    const c2Match = item.c2 && (item.c2.placa.toLowerCase().includes(q) || item.c2.modelo.toLowerCase().includes(q));
+    return (
+      (item.placa_cavalo && item.placa_cavalo.toLowerCase().includes(q)) ||
+      (item.placa_carreta && item.placa_carreta.toLowerCase().includes(q)) ||
+      (item.transportador && item.transportador.toLowerCase().includes(q)) ||
+      (item.data && item.data.toLowerCase().includes(q)) ||
+      c1Match ||
+      c2Match
+    );
+  });
 
   // Calculate Aggregates
   const totalVolume = ordersList.reduce((acc, curr) => acc + (Number(curr.volume_total) || Number(curr.volume_cubado) || 0), 0);
@@ -895,9 +1038,8 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
                   <input
                     type="text"
                     value={sharedData.data}
-                    onChange={e => setSharedData({ ...sharedData, data: formatDateInput(e.target.value) })}
+                    onChange={e => setSharedData({ ...sharedData, data: e.target.value })}
                     placeholder="Ex: 09/08/2026"
-                    maxLength={10}
                     className="w-full px-3 py-2 rounded-lg bg-white border border-[#8c6039]/40 focus:border-[#8c060a] focus:ring-2 focus:ring-[#8c060a]/20 outline-none font-mono font-bold text-xs text-[#2b180d] transition-all shadow-inner"
                   />
                 </div>
@@ -1177,6 +1319,443 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
         </div>
 
       </div>
+
+      {/* ================= REALTIME DATABASE HISTORY (CARDS / LISTAGEM) ================= */}
+      <div className="w-full rounded-2xl bg-[#eedec7] border-2 border-[#a68a6d] shadow-[4px_6px_16px_rgba(0,0,0,0.25)] p-5 sm:p-6 relative mt-2">
+        <Screw className="absolute top-2.5 left-2.5" />
+        <Screw className="absolute top-2.5 right-2.5" />
+        <Screw className="absolute bottom-2.5 left-2.5" />
+        <Screw className="absolute bottom-2.5 right-2.5" />
+
+        {/* Table Header & Search */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#a68a6d]/40 pb-4 mb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-black uppercase text-[#2b180d] font-serif tracking-tight">
+                Ordens de Coleta e Cubagens Salvas
+              </h2>
+              <span className="px-2 py-0.5 rounded-full bg-[#8c060a] text-white text-[10px] font-mono font-bold">
+                {ordersList.length}
+              </span>
+            </div>
+            <p className="text-xs text-[#5c3c24] font-medium">
+              Sincronização em tempo real via Firebase Realtime Database no nó <code className="font-mono bg-white/60 px-1.5 py-0.5 rounded text-[#8c060a]">/ordens_coleta</code>
+            </p>
+          </div>
+
+          {/* Search Box */}
+          <div className="relative min-w-[240px]">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Buscar por placa, modelo, data..."
+              className="w-full pl-9 pr-4 py-2 rounded-xl bg-white border border-[#a68a6d]/60 text-xs font-medium text-[#2b180d] placeholder:text-[#8c6039]/60 outline-none focus:border-[#8c060a] focus:ring-2 focus:ring-[#8c060a]/20 shadow-inner"
+            />
+            <Search size={15} className="absolute left-3 top-2.5 text-[#8c6039]/60 pointer-events-none" />
+          </div>
+        </div>
+
+        {/* Cards Content */}
+        {loadingOrders ? (
+          <div className="py-12 flex flex-col items-center justify-center gap-2 text-[#5c3c24]">
+            <Loader2 size={24} className="animate-spin text-[#8c060a]" />
+            <span className="text-xs font-bold uppercase tracking-wider">Carregando ordens de coleta...</span>
+          </div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="py-12 text-center text-[#5c3c24] bg-white/40 rounded-xl border border-[#a68a6d]/30">
+            <Boxes size={32} className="mx-auto text-[#a68a6d] mb-2 opacity-60" />
+            <p className="text-sm font-bold">Nenhum registro de cubagem encontrado.</p>
+            <p className="text-xs text-[#5c3c24]/80 mt-1">
+              Envie uma planilha Excel ou preencha o formulário para salvar o primeiro veículo.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {filteredOrders.map((order, idx) => {
+              const isBitrem = order.tipo_veiculo === 'BITREM' || order.tipo_veiculo === 'bitrem' || Boolean(order.c2 && order.c2.placa);
+              const volTotal = order.volume_total || order.volume_cubado || ((Number(order.c1?.volume) || 0) + (Number(order.c2?.volume) || 0));
+
+              return (
+                <div 
+                  key={order.id || idx}
+                  className="w-full bg-[#fdfaf5] border border-[#a68a6d]/60 rounded-xl p-4 shadow-sm hover:shadow-md transition-all flex flex-col lg:flex-row lg:items-center justify-between gap-4"
+                >
+                  {/* LEFT SECTION: Data, Transportador, Tipo */}
+                  <div className="flex items-center gap-3 min-w-[200px]">
+                    <div className="w-10 h-10 rounded-xl bg-[#eedec7] border border-[#a68a6d]/50 flex items-center justify-center text-[#8c060a] shrink-0 shadow-inner">
+                      <Calendar size={18} />
+                    </div>
+                    <div className="flex flex-col">
+                      <span className="text-xs font-mono font-bold text-[#2b180d]">
+                        {order.data || '-'}
+                      </span>
+                      <span className="text-[11px] font-black uppercase text-[#5c3c24] truncate max-w-[150px]">
+                        {order.transportador || 'FROTA / PRÓPRIO'}
+                      </span>
+                      <div className="mt-0.5">
+                        {isBitrem ? (
+                          <span className="px-2 py-0.5 rounded bg-[#8B0000] text-white text-[9px] font-black uppercase tracking-wider shadow-sm">
+                            BITREM / RODOTREM
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded bg-[#d9c0a6] text-[#3a200a] text-[9px] font-black uppercase tracking-wider">
+                            CARRETA ÚNICA
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* CENTER-LEFT: Cavalo Plate */}
+                  <div className="flex flex-col items-center justify-center px-2">
+                    <span className="text-[8.5px] font-black uppercase tracking-widest text-[#5c3c24]/80 mb-1">
+                      Cavalo Mecânico
+                    </span>
+                    <LicensePlate plate={order.placa_cavalo} type="cavalo" size="md" />
+                  </div>
+
+                  {/* CENTER-RIGHT: Carretas Breakdown (Vertical Stack C1 & C2) */}
+                  <div className="flex-1 flex flex-col gap-2 bg-[#f5ecdf]/60 border border-[#a68a6d]/40 rounded-xl p-3 shadow-inner">
+                    
+                    {/* C1 ROW */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="px-2 py-0.5 rounded bg-[#f8d7da] text-[#8B0000] border border-[#f5c6cb] font-black text-[10px] uppercase tracking-wider shrink-0 shadow-xs">
+                        C1
+                      </span>
+                      <LicensePlate plate={order.c1?.placa || '-'} type="carreta" size="sm" />
+                      <span className="px-2 py-0.5 rounded bg-white text-[#2b180d] border border-[#a68a6d]/40 text-[10px] font-black uppercase">
+                        {order.c1?.modelo || order.modelo_carreta || 'SIDER'}
+                      </span>
+                      {order.c1?.pallets !== undefined && (
+                        <span className="px-2 py-0.5 rounded bg-[#eedec7] text-[#3a200a] text-[10px] font-mono font-bold border border-[#a68a6d]/40">
+                          {order.c1.pallets} Plt
+                        </span>
+                      )}
+                      {order.c1?.pbt !== undefined && (
+                        <span className="px-2 py-0.5 rounded bg-[#eedec7] text-[#3a200a] text-[10px] font-mono font-bold border border-[#a68a6d]/40">
+                          {String(order.c1.pbt).includes('T') ? order.c1.pbt : `${order.c1.pbt} T`}
+                        </span>
+                      )}
+                      <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono font-black text-xs ml-auto shadow-xs">
+                        {order.c1?.volume || 0} m³
+                      </span>
+                    </div>
+
+                    {/* C2 ROW (If Bitrem) */}
+                    {isBitrem && order.c2 && (
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#a68a6d]/20">
+                        <span className="px-2 py-0.5 rounded bg-[#f8d7da] text-[#8B0000] border border-[#f5c6cb] font-black text-[10px] uppercase tracking-wider shrink-0 shadow-xs">
+                          C2
+                        </span>
+                        <LicensePlate plate={order.c2.placa || '-'} type="carreta" size="sm" />
+                        <span className="px-2 py-0.5 rounded bg-white text-[#2b180d] border border-[#a68a6d]/40 text-[10px] font-black uppercase">
+                          {order.c2.modelo || order.modelo_carreta || 'SIDER'}
+                        </span>
+                        {order.c2.pallets !== undefined && (
+                          <span className="px-2 py-0.5 rounded bg-[#eedec7] text-[#3a200a] text-[10px] font-mono font-bold border border-[#a68a6d]/40">
+                            {order.c2.pallets} Plt
+                          </span>
+                        )}
+                        {order.c2.pbt !== undefined && (
+                          <span className="px-2 py-0.5 rounded bg-[#eedec7] text-[#3a200a] text-[10px] font-mono font-bold border border-[#a68a6d]/40">
+                            {String(order.c2.pbt).includes('T') ? order.c2.pbt : `${order.c2.pbt} T`}
+                          </span>
+                        )}
+                        <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-900 border border-emerald-300 font-mono font-black text-xs ml-auto shadow-xs">
+                          {order.c2.volume || 0} m³
+                        </span>
+                      </div>
+                    )}
+
+                  </div>
+
+                  {/* RIGHT SECTION: TOTAL BALLOON & ACTIONS */}
+                  <div className="flex items-center gap-3 justify-between lg:justify-end border-t lg:border-t-0 lg:border-l border-[#a68a6d]/30 pt-3 lg:pt-0 lg:pl-4">
+                    
+                    {/* TOTAL BALLOON */}
+                    <div className="px-4 py-2 rounded-xl bg-gradient-to-br from-[#8c060a] to-[#4e0205] text-white shadow-md text-center min-w-[110px]">
+                      <span className="text-[8.5px] uppercase font-bold text-[#ffd880] block tracking-wider">
+                        TOTAL
+                      </span>
+                      <span className="text-base font-black font-mono text-white leading-tight">
+                        {volTotal} <span className="text-xs font-normal">m³</span>
+                      </span>
+                    </div>
+
+                    {/* ACTIONS */}
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        title="Editar Ordem"
+                        onClick={() => handleOpenEdit(order)}
+                        className="p-2 rounded-lg bg-[#eedec7] hover:bg-[#d9c0a6] text-[#5c3c24] hover:text-[#2b180d] transition-colors cursor-pointer shadow-sm"
+                      >
+                        <Edit3 size={15} />
+                      </button>
+
+                      <button
+                        type="button"
+                        title="Copiar dados"
+                        onClick={() => handleCopy(order)}
+                        className="p-2 rounded-lg bg-[#eedec7] hover:bg-[#d9c0a6] text-[#5c3c24] hover:text-[#2b180d] transition-colors cursor-pointer shadow-sm"
+                      >
+                        {copiedId === (order.id || 'copied') ? (
+                          <Check size={15} className="text-emerald-700 stroke-[3]" />
+                        ) : (
+                          <Copy size={15} />
+                        )}
+                      </button>
+
+                      {!isReadOnly && (
+                        <button
+                          type="button"
+                          title="Excluir Ordem"
+                          onClick={() => handleDeleteOrder(order.id)}
+                          className="p-2 rounded-lg bg-red-100 hover:bg-red-200 text-red-700 transition-colors cursor-pointer shadow-sm"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
+
+                  </div>
+
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+      </div>
+
+      {/* ================= EDIT ORDER MODAL ================= */}
+      {editingItem && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-[#eedec7] border-2 border-[#a68a6d] rounded-2xl shadow-2xl p-6 relative overflow-hidden animate-scale-up max-h-[90vh] overflow-y-auto">
+            <Screw className="absolute top-2.5 left-2.5" />
+            <Screw className="absolute top-2.5 right-2.5" />
+            <Screw className="absolute bottom-2.5 left-2.5" />
+            <Screw className="absolute bottom-2.5 right-2.5" />
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[#a68a6d]/40 pb-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Edit3 size={20} className="text-[#8c060a]" />
+                <h3 className="text-lg font-serif font-black uppercase text-[#2b180d]">
+                  Editar Ordem de Coleta
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="p-1.5 rounded-lg hover:bg-[#d9c0a6] text-[#5c3c24] transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Mode Switch in Edit */}
+            <div className="bg-[#dfcbaf] p-1 rounded-xl border border-[#a68a6d] flex items-center gap-1 mb-4">
+              <button
+                type="button"
+                onClick={() => setEditMode('SINGLE')}
+                className={cn(
+                  "flex-1 py-1.5 px-3 rounded-lg text-xs font-black uppercase transition-all cursor-pointer",
+                  editMode === 'SINGLE' ? "bg-[#8B0000] text-white shadow" : "text-[#3a200a]"
+                )}
+              >
+                Carreta Única
+              </button>
+              <button
+                type="button"
+                onClick={() => setEditMode('BITREM')}
+                className={cn(
+                  "flex-1 py-1.5 px-3 rounded-lg text-xs font-black uppercase transition-all cursor-pointer",
+                  editMode === 'BITREM' ? "bg-[#8B0000] text-white shadow" : "text-[#3a200a]"
+                )}
+              >
+                BITREM / RODOTREM (C1 e C2)
+              </button>
+            </div>
+
+            {/* Shared Block in Edit */}
+            <div className="bg-[#f7efe4] border border-[#a68a6d]/60 rounded-xl p-3.5 mb-3">
+              <span className="text-[9.5px] font-black uppercase tracking-wider text-[#5c3c24] block mb-2">
+                Dados Compartilhados do Veículo
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="text-[9px] font-black uppercase text-[#3a200a] block">Placa Cavalo</label>
+                  <input
+                    type="text"
+                    value={editShared.placa_cavalo}
+                    onChange={e => setEditShared({ ...editShared, placa_cavalo: normalizePlate(e.target.value) })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs uppercase"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black uppercase text-[#3a200a] block">Data</label>
+                  <input
+                    type="text"
+                    value={editShared.data}
+                    onChange={e => setEditShared({ ...editShared, data: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-[9px] font-black uppercase text-[#3a200a] block">Transportador</label>
+                  <input
+                    type="text"
+                    value={editShared.transportador}
+                    onChange={e => setEditShared({ ...editShared, transportador: e.target.value.toUpperCase() })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-sans font-bold text-xs uppercase"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* C1 in Edit */}
+            <div className="bg-[#fcf7ee] border-2 border-[#a52a2a]/30 rounded-xl p-3.5 mb-3">
+              <span className="text-[9.5px] font-black uppercase tracking-wider text-[#8B0000] block mb-2">
+                Carreta 1 (C1)
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                <div className="sm:col-span-2">
+                  <label className="text-[9px] font-black uppercase text-[#3a200a] block">Placa C1</label>
+                  <input
+                    type="text"
+                    value={editC1.placa}
+                    onChange={e => setEditC1({ ...editC1, placa: normalizePlate(e.target.value) })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs uppercase"
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <label className="text-[9px] font-black uppercase text-[#3a200a] block">Modelo C1</label>
+                  <input
+                    type="text"
+                    value={editC1.modelo}
+                    onChange={e => setEditC1({ ...editC1, modelo: e.target.value.toUpperCase() })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-sans font-bold text-xs uppercase"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[9px] font-black uppercase text-[#8B0000] block">Volume C1 (m³)</label>
+                  <input
+                    type="number"
+                    value={editC1.volume}
+                    onChange={e => setEditC1({ ...editC1, volume: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8B0000]/40 font-mono font-bold text-xs text-[#8B0000]"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-[9px] font-black uppercase text-[#3a200a] block">Pallets C1</label>
+                  <input
+                    type="number"
+                    value={editC1.pallets}
+                    onChange={e => setEditC1({ ...editC1, pallets: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs"
+                  />
+                </div>
+                <div className="sm:col-span-1">
+                  <label className="text-[9px] font-black uppercase text-[#3a200a] block">PBT C1</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={editC1.pbt}
+                    onChange={e => setEditC1({ ...editC1, pbt: e.target.value })}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* C2 in Edit (If Bitrem) */}
+            {editMode === 'BITREM' && (
+              <div className="bg-[#fcf7ee] border-2 border-[#a52a2a]/30 rounded-xl p-3.5 mb-3">
+                <span className="text-[9.5px] font-black uppercase tracking-wider text-[#8B0000] block mb-2">
+                  Carreta 2 (C2)
+                </span>
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2.5">
+                  <div className="sm:col-span-2">
+                    <label className="text-[9px] font-black uppercase text-[#3a200a] block">Placa C2</label>
+                    <input
+                      type="text"
+                      value={editC2.placa}
+                      onChange={e => setEditC2({ ...editC2, placa: normalizePlate(e.target.value) })}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs uppercase"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="text-[9px] font-black uppercase text-[#3a200a] block">Modelo C2</label>
+                    <input
+                      type="text"
+                      value={editC2.modelo}
+                      onChange={e => setEditC2({ ...editC2, modelo: e.target.value.toUpperCase() })}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-sans font-bold text-xs uppercase"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[9px] font-black uppercase text-[#8B0000] block">Volume C2 (m³)</label>
+                    <input
+                      type="number"
+                      value={editC2.volume}
+                      onChange={e => setEditC2({ ...editC2, volume: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8B0000]/40 font-mono font-bold text-xs text-[#8B0000]"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="text-[9px] font-black uppercase text-[#3a200a] block">Pallets C2</label>
+                    <input
+                      type="number"
+                      value={editC2.pallets}
+                      onChange={e => setEditC2({ ...editC2, pallets: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs"
+                    />
+                  </div>
+                  <div className="sm:col-span-1">
+                    <label className="text-[9px] font-black uppercase text-[#3a200a] block">PBT C2</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={editC2.pbt}
+                      onChange={e => setEditC2({ ...editC2, pbt: e.target.value })}
+                      className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-[#8c6039]/40 font-mono font-bold text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Total Footer in Edit */}
+            <div className="p-3 rounded-xl bg-[#2b180d] text-[#ffd880] flex items-center justify-between mb-4 text-xs font-bold">
+              <span>Volume Total Calculado:</span>
+              <span className="text-base font-black font-mono text-white">{totalVolumeEdit} m³</span>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-[#a68a6d]/40">
+              <button
+                type="button"
+                onClick={() => setEditingItem(null)}
+                className="px-4 py-2 rounded-lg bg-[#d9c0a6] text-[#3a200a] text-xs font-bold uppercase cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSavingEdit}
+                onClick={handleSaveEdit}
+                className="px-5 py-2 rounded-lg bg-[#8B0000] text-white text-xs font-black uppercase shadow cursor-pointer flex items-center gap-1.5"
+              >
+                {isSavingEdit ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                <span>Salvar Alterações</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );
