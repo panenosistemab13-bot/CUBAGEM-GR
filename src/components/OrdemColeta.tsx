@@ -969,16 +969,18 @@ export default function OrdemColeta({ currentUser, isReadOnly = false }: OrdemCo
         modelo_carreta: finalModeloCarreta,
         numero_pallets: finalPalletsTotal,
         pbt: finalPbtTotal,
+
         c1_placa: c1Placa,
         c1_modelo: c1Modelo,
         c1_volume: c1Vol,
         c1_pallets: c1Pal,
         c1_pbt: c1Pbt,
-        c2_placa: isBitrem ? c2Placa : undefined,
-        c2_modelo: isBitrem ? c2Modelo : undefined,
-        c2_volume: isBitrem ? c2Vol : undefined,
-        c2_pallets: isBitrem ? c2Pal : undefined,
-        c2_pbt: isBitrem ? c2Pbt : undefined
+
+        c2_placa: isBitrem ? c2Placa : null,
+        c2_modelo: isBitrem ? c2Modelo : null,
+        c2_volume: isBitrem ? c2Vol : null,
+        c2_pallets: isBitrem ? c2Pal : null,
+        c2_pbt: isBitrem ? c2Pbt : null
       };
 
       await set(newOrderRef, recordToSave);
