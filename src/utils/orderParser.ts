@@ -1,5 +1,32 @@
 import * as XLSX from 'xlsx';
+import * as pdfjsLib from 'pdfjs-dist';
 import { ParseOrderResult } from '../types';
+
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
+
+export async function extractTextFromPdfArrayBuffer(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useSystemFonts: true,
+      disableFontFace: true,
+      // @ts-ignore
+      disableWorker: true
+    });
+    const pdfDoc = await loadingTask.promise;
+    let fullText = '';
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += pageText + '\n';
+    }
+    return fullText;
+  } catch (err) {
+    console.error('Error parsing PDF arrayBuffer with pdfjs:', err);
+    return '';
+  }
+}
 
 // Helper to normalize plate (ABC1234 or ABC1D23)
 export function normalizePlate(str: string): string {
@@ -9,7 +36,7 @@ export function normalizePlate(str: string): string {
 
 // Strict Regex for Brazilian Standard (ABC1234) and Mercosul (ABC1D23 / JAT4G68)
 export const BRAZIL_PLATE_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/i;
-export const PLATE_SEARCH_REGEX = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4}/gi;
+export const PLATE_SEARCH_REGEX = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/gi;
 export const PLATE_REGEX = PLATE_SEARCH_REGEX;
 
 // Validates if a string is strictly a Brazilian/Mercosul plate
@@ -245,6 +272,18 @@ interface GridCell {
   c: number;
   val: string;
   raw: any;
+}
+
+// Auto-format date input with slashes as the user types (e.g. 06 -> 06/08/2026)
+export function formatDateInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 8);
+  if (digits.length <= 2) {
+    return digits;
+  } else if (digits.length <= 4) {
+    return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+  } else {
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  }
 }
 
 // Main parser for Excel Workbook or ArrayBuffer
@@ -955,8 +994,9 @@ export function parseBitremData(input: {
   const rawPbtStr = String(input.pbt ?? '').replace(',', '.');
   const totalPbt = parseFloat(rawPbtStr) || 0;
 
-  // Check if plate string contains slash '/' or multiple plates
-  const plates = rawCarreta.split(/[/,;+&]/).map(p => normalizePlate(p)).filter(Boolean);
+  // Check if plate string contains slash '/' or multiple plates with strict deduplication
+  const rawPlates = rawCarreta.split(/[/,;+&]/).map(p => normalizePlate(p)).filter(Boolean);
+  const plates = Array.from(new Set(rawPlates));
 
   const hasMultiplePlates = plates.length >= 2;
   const hasExplicitC2 = Boolean(input.c2_placa && normalizePlate(input.c2_placa));
@@ -964,7 +1004,7 @@ export function parseBitremData(input: {
 
   if (isBitrem && (hasMultiplePlates || hasExplicitC2)) {
     const p1 = input.c1_placa ? normalizePlate(input.c1_placa) : (plates[0] || '');
-    const p2 = input.c2_placa ? normalizePlate(input.c2_placa) : (plates[1] || '');
+    const p2 = input.c2_placa ? normalizePlate(input.c2_placa) : (plates[1] || plates[0] || '');
 
     // Volumes: use individual if provided, otherwise half of total each
     let numV1: number;
@@ -1032,6 +1072,7 @@ export function parseBitremData(input: {
     const m1 = (input.c1_modelo || cleanModelo).toUpperCase();
     const m2 = (input.c2_modelo || cleanModelo).toUpperCase();
 
+    // STRICT LIMIT: Max 2 carretas (C1 and C2)
     const carretas: CarretaItem[] = [
       {
         tag: 'C1',
@@ -1049,7 +1090,7 @@ export function parseBitremData(input: {
         pbt: numPbt2 || (totalPbt ? String(numPbt2) : '---'),
         volume: numV2
       }
-    ];
+    ].slice(0, 2);
 
     const calculatedTotalVol = numV1 + numV2;
     const calculatedTotalPal = numPal1 + numPal2;
@@ -1064,7 +1105,7 @@ export function parseBitremData(input: {
       totalVolume: calculatedTotalVol || totalVol,
       totalPallets: calculatedTotalPal || totalPal,
       totalPbt: calculatedTotalPbt || totalPbt,
-      rawPlacaCarreta: `${p1} / ${p2}`
+      rawPlacaCarreta: p1 && p2 && p1 !== p2 ? `${p1} / ${p2}` : (p1 || p2)
     };
   }
 
@@ -1095,3 +1136,164 @@ export function parseBitremData(input: {
     rawPlacaCarreta: singlePlate
   };
 }
+
+// 100% Local Text Order Parser (No external API or server required)
+export function parseLocalTextOrder(textContent: string): ParseOrderResult {
+  const upperText = textContent.toUpperCase();
+  
+  // FIX DEFINITIVO: Limpeza agressiva do texto para capturar placas grudadas
+  const textoLimpo = textContent.replace(/[\s\-]/g, '').toUpperCase();
+  const regexPlacaAgressivo = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/g;
+  const placasEncontradas = textoLimpo.match(regexPlacaAgressivo) || [];
+  const uniquePlates = Array.from(new Set(placasEncontradas));
+
+  const placaCavalo = uniquePlates[0] || '';
+  const placaCarreta1 = uniquePlates[1] || '';
+  const placaCarreta2 = uniquePlates[2] || '';
+
+  const isBitrem = Boolean(placaCarreta2 && placaCarreta2 !== placaCarreta1);
+  const modeloExtraido = (textoLimpo.includes('BAU') || textoLimpo.includes('BAÚ')) ? 'BAU' : 'SIDER';
+
+  // 2. Date extraction (e.g. 6/8/2026 or 06/08/2026)
+  let dataStr = '';
+  const dateMatch = upperText.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  if (dateMatch) {
+    const d = dateMatch[1].padStart(2, '0');
+    const m = dateMatch[2].padStart(2, '0');
+    let y = dateMatch[3];
+    if (y.length === 2) y = '20' + y;
+    dataStr = `${d}/${m}/${y}`;
+  } else {
+    dataStr = new Date().toLocaleDateString('pt-BR');
+  }
+
+  // 3. Transportador
+  let transportador = 'TRANSMAGNA';
+  if (upperText.includes('TRANSMAGNA')) transportador = 'TRANSMAGNA';
+  else if (upperText.includes('TRANSPORTADOR')) {
+    const idx = upperText.indexOf('TRANSPORTADOR');
+    if (idx !== -1) {
+      const sub = textContent.slice(idx, idx + 40);
+      const parts = sub.split(/[:\-\n]/);
+      if (parts[1] && parts[1].trim().length > 2) {
+        transportador = parts[1].trim();
+      }
+    }
+  }
+
+  // 4. Perfil / Modelo Carreta
+  let perfilCarreta = 'SIDER';
+  if (upperText.includes('BAU') || upperText.includes('BAÚ')) {
+    perfilCarreta = 'BAU';
+  } else if (upperText.includes('REFRIGERADO') || upperText.includes('FRIGORIFICO')) {
+    perfilCarreta = 'REFRIGERADO';
+  } else if (upperText.includes('GRADE BAIXA')) {
+    perfilCarreta = 'GRADE BAIXA';
+  } else if (upperText.includes('SIDER')) {
+    perfilCarreta = 'SIDER';
+  }
+
+  // 5. Capacidade Pallets
+  let capacidadePallets = 28;
+  const palMatch = upperText.match(/(?:PALLETS|PALETE|PLT)\D*(\d{1,2})/);
+  if (palMatch) {
+    const val = parseInt(palMatch[1], 10);
+    if (val > 0 && val <= 100) capacidadePallets = val;
+  }
+
+  // 6. PBT / Toneladas
+  let pbtVal = 30;
+  const pbtMatch = upperText.match(/(?:TONELADAS|PBT|TON)\D*(\d{1,2})(?:[,\.]\d+)?/);
+  if (pbtMatch) {
+    const val = parseFloat(pbtMatch[1].replace(',', '.'));
+    if (val > 0 && val <= 100) pbtVal = val;
+  }
+
+  return {
+    placa_cavalo: placaCavalo,
+    placa_carreta: isBitrem ? `${placaCarreta1} / ${placaCarreta2}` : placaCarreta1,
+    placa_c1: placaCarreta1,
+    placa_c2: placaCarreta2,
+    tipo_veiculo: isBitrem ? 'BITREM' : 'SINGLE',
+    modelo_carreta: modeloExtraido,
+    volume_cubado: isBitrem ? 175 : 90,
+    numero_pallets: capacidadePallets,
+    pbt: pbtVal,
+    data: dataStr || new Date().toLocaleDateString('pt-BR'),
+    transportador: transportador,
+    c1: { placa: placaCarreta1, modelo: modeloExtraido, volume: isBitrem ? 87 : 90, pallets: isBitrem ? Math.floor(capacidadePallets / 2) : capacidadePallets, pbt: isBitrem ? Math.round(pbtVal / 2) : pbtVal },
+    c2: isBitrem ? { placa: placaCarreta2, modelo: modeloExtraido, volume: Math.round(pbtVal - 87), pallets: Math.ceil(capacidadePallets / 2), pbt: Math.round(pbtVal / 2) } : undefined
+  };
+}
+
+export async function parsePDFLocal(file: File): Promise<ParseOrderResult | null> {
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useSystemFonts: true,
+      disableFontFace: true,
+      // @ts-ignore - disableWorker is sometimes available in specific builds or older versions
+      disableWorker: true 
+    });
+    const pdfDoc = await loadingTask.promise;
+    
+    let fullText = '';
+    for (let i = 1; i <= pdfDoc.numPages; i++) {
+      const page = await pdfDoc.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item: any) => item.str).join(' ');
+      fullText += ' ' + pageText;
+    }
+
+    console.log("Texto extraído localmente do PDF:", fullText);
+
+    // FIX DEFINITIVO: Limpeza agressiva do texto para capturar placas grudadas
+    const textoLimpo = fullText.replace(/[\s\-]/g, '').toUpperCase();
+    console.log("Texto limpo para busca de placas/modelo:", textoLimpo);
+    
+    const regexPlacaAgressivo = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/g;
+    const placasEncontradas = textoLimpo.match(regexPlacaAgressivo) || [];
+    const placasLimpas = [...new Set(placasEncontradas)];
+
+    const matchData = fullText.match(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/);
+    
+    let transportador = 'TRANSMAGNA';
+    if (/TRANSMAGNA/i.test(fullText)) transportador = 'TRANSMAGNA';
+    else if (/MOEDENSE/i.test(fullText)) transportador = 'MOEDENSE';
+    else if (/FROTA/i.test(fullText)) transportador = 'FROTA';
+
+    const matchPallets = fullText.match(/CAPACIDADE\s*PALLETS[^\d]*(\d+)/i) || fullText.match(/PALLETS[^\d]*(\d+)/i);
+    const matchTon = fullText.match(/CAPACIDADE\s*TONELADAS[^\d]*(\d+)/i) || fullText.match(/TONELADAS[^\d]*(\d+)/i);
+
+    const placaCavalo = placasLimpas[0] || '';
+    const placaC1 = placasLimpas[1] || '';
+    const placaC2 = placasLimpas[2] || '';
+    const temDuasCarretas = Boolean(placaC2 && placaC2 !== placaC1);
+    const pallets = matchPallets ? parseInt(matchPallets[1], 10) : 28;
+    const pbt = matchTon ? parseFloat(matchTon[1]) : 30;
+    const modelo = (textoLimpo.includes('BAU') || textoLimpo.includes('BAÚ')) ? 'BAU' : 'SIDER';
+
+    return {
+      placa_cavalo: placaCavalo,
+      placa_carreta: temDuasCarretas ? `${placaC1} / ${placaC2}` : placaC1,
+      placa_c1: placaC1,
+      placa_c2: placaC2,
+      tipo_veiculo: temDuasCarretas ? 'BITREM' : 'SINGLE',
+      modelo_carreta: modelo,
+      modelo: modelo,
+      volume_cubado: temDuasCarretas ? 175 : 90,
+      numero_pallets: pallets,
+      pbt: pbt,
+      data: matchData ? matchData[1] : new Date().toLocaleDateString('pt-BR'),
+      transportador: transportador,
+      c1: { placa: placaC1, modelo: modelo, volume: temDuasCarretas ? 87 : 90, pallets: temDuasCarretas ? Math.floor(pallets / 2) : pallets, pbt: temDuasCarretas ? Math.round(pbt / 2) : pbt },
+      c2: temDuasCarretas ? { placa: placaC2, modelo: modelo, volume: Math.round(pbt - 87), pallets: Math.ceil(pallets / 2), pbt: Math.round(pbt / 2) } : undefined
+    };
+  } catch (err) {
+    console.error("Erro ao ler PDF localmente:", err);
+    return null;
+  }
+}
+
+

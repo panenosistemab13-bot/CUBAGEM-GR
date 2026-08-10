@@ -1,6 +1,6 @@
 import React from 'react';
 import { Edit, Trash2, Save, X } from 'lucide-react';
-import { parseBitremData, CarretaItem, BitremParseResult } from '../utils/orderParser';
+import { parseBitremData, CarretaItem, BitremParseResult, formatDateInput } from '../utils/orderParser';
 import { cn } from '../lib/utils';
 
 // High-fidelity Mercosul License Plate component
@@ -115,12 +115,9 @@ export const CubagemTableRow: React.FC<CubagemTableRowProps> = ({
   onCancelEdit,
   onDelete
 }) => {
-  // Extract and decompose all carretas for this group (handling Bitrem split rigorously)
+  // Extract, deduplicate, and decompose carretas strictly capped at 2 (C1 and C2)
   const parsedData = React.useMemo(() => {
-    const allCarretas: CarretaItem[] = [];
-    let totalVol = 0;
-    let totalPal = 0;
-    let totalPbt = 0;
+    const mapPlacas = new Map<string, CarretaItem>();
     let dataStr = '';
     let transpStr = '';
 
@@ -140,24 +137,39 @@ export const CubagemTableRow: React.FC<CubagemTableRowProps> = ({
       });
 
       parsed.carretas.forEach((c) => {
-        allCarretas.push({
-          ...c,
-          id: sub.id
-        });
+        const cleanPlate = (c.placa || '').trim().toUpperCase();
+        if (cleanPlate && cleanPlate !== '---') {
+          if (!mapPlacas.has(cleanPlate)) {
+            mapPlacas.set(cleanPlate, {
+              ...c,
+              placa: cleanPlate,
+              id: sub.id
+            });
+          }
+        } else {
+          // Fallback for items without plate
+          mapPlacas.set(`NOPLATE_${Math.random()}`, {
+            ...c,
+            id: sub.id
+          });
+        }
       });
-
-      totalVol += parsed.totalVolume;
-      totalPal += parsed.totalPallets;
-      totalPbt += parsed.totalPbt;
     });
 
-    const isBitrem = allCarretas.length > 1;
+    // STRICT LIMIT: Max 2 carretas (C1 and C2)
+    const uniqueCarretas = Array.from(mapPlacas.values()).slice(0, 2);
+    const isBitrem = uniqueCarretas.length > 1;
 
-    // Label tags appropriately: C1, C2, C3...
-    const labeledCarretas = allCarretas.map((c, idx) => ({
+    // Label tags strictly as C1, C2 or Única (never C3, C4)
+    const labeledCarretas = uniqueCarretas.map((c, idx) => ({
       ...c,
       tag: isBitrem ? `C${idx + 1}` : 'Única'
     }));
+
+    // Strict volume sum: C1 + C2
+    const totalVol = labeledCarretas.reduce((acc, c) => acc + (Number(c.volume) || 0), 0);
+    const totalPal = labeledCarretas.reduce((acc, c) => acc + (typeof c.pallets === 'number' ? c.pallets : (Number(c.pallets) || 0)), 0);
+    const totalPbt = Number(labeledCarretas.reduce((acc, c) => acc + (typeof c.pbt === 'number' ? c.pbt : (Number(String(c.pbt).replace(/[^\d.,]/g, '').replace(',', '.')) || 0)), 0).toFixed(1));
 
     return {
       isBitrem,
@@ -181,9 +193,10 @@ export const CubagemTableRow: React.FC<CubagemTableRowProps> = ({
                 key={sub.id || idx}
                 type="text"
                 value={sub.data || ''}
+                maxLength={10}
                 onChange={(e) => {
                   const updated = [...editingGroupItems];
-                  updated[idx].data = e.target.value;
+                  updated[idx].data = formatDateInput(e.target.value);
                   setEditingGroupItems(updated);
                 }}
                 placeholder="DD/MM/AAAA"
