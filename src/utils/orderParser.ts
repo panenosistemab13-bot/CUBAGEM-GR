@@ -1112,37 +1112,116 @@ export function parseBitremData(input: {
 
 // 100% Local Text Order Parser (No external API or server required)
 export function parseLocalTextOrder(textContent: string): ParseOrderResult {
-  const matches = (textContent.match(PLATE_SEARCH_REGEX) || []).map(p => normalizePlate(p)).filter(Boolean);
-  const uniquePlates = Array.from(new Set(matches));
+  const lines = textContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   
-  let cavalo = '';
-  const carretasFound: string[] = [];
-  
-  for (const p of uniquePlates) {
-    if (isValidPlate(p)) {
-      if (!cavalo) {
-        cavalo = p;
-      } else if (carretasFound.length < 2) {
-        carretasFound.push(p);
+  let transportador = '';
+  let dataStr = '';
+  let placaCavalo = '';
+  let placaCarreta1 = '';
+  let placaCarreta2 = '';
+  let perfilCarreta = 'SIDER';
+  let capacidadePallets = 24;
+  let pbtVal = 30;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].toUpperCase();
+    const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
+
+    if (line.includes('TRANSPORTADOR') || line === 'TRANSPORTADOR') {
+      if (nextLine && !nextLine.includes(':') && nextLine.length > 2) {
+        transportador = nextLine;
+      } else {
+        const parts = lines[i].split(/[:\-\s]+/);
+        if (parts.length > 1 && parts[parts.length - 1].length > 2) {
+          transportador = parts[parts.length - 1];
+        }
+      }
+    }
+
+    if (line.includes('DATA DE CARREGAMENTO') || line.includes('DATA')) {
+      const dateMatch = (lines[i] + ' ' + nextLine).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
+      if (dateMatch) {
+        const d = dateMatch[1].padStart(2, '0');
+        const m = dateMatch[2].padStart(2, '0');
+        let y = dateMatch[3];
+        if (y.length === 2) y = '20' + y;
+        dataStr = `${d}/${m}/${y}`;
+      }
+    }
+
+    if (line.includes('PLACA CAVALO')) {
+      const match = (lines[i] + ' ' + nextLine).match(PLATE_SEARCH_REGEX);
+      if (match) placaCavalo = normalizePlate(match[0]);
+    }
+
+    if (line.includes('PLACA CARRETA 1') || line.includes('CARRETA 1')) {
+      const match = (lines[i] + ' ' + nextLine).match(PLATE_SEARCH_REGEX);
+      if (match) placaCarreta1 = normalizePlate(match[0]);
+    }
+
+    if (line.includes('PLACA CARRETA 2') || line.includes('CARRETA 2')) {
+      const match = (lines[i] + ' ' + nextLine).match(PLATE_SEARCH_REGEX);
+      if (match) placaCarreta2 = normalizePlate(match[0]);
+    }
+
+    if (line.includes('PERFIL CARRETA') || line.includes('MODELO CARRETA')) {
+      const comb = (lines[i] + ' ' + nextLine).toUpperCase();
+      if (comb.includes('BAU') || comb.includes('BAÚ')) {
+        perfilCarreta = 'BAU';
+      } else if (comb.includes('SIDER')) {
+        perfilCarreta = 'SIDER';
+      }
+    }
+
+    if (line.includes('CAPACIDADE PALLETS') || line.includes('PALLETS')) {
+      const numMatch = (lines[i] + ' ' + nextLine).match(/\b(\d{1,2})\b/);
+      if (numMatch) {
+        const val = parseInt(numMatch[1], 10);
+        if (val > 0 && val <= 100) capacidadePallets = val;
+      }
+    }
+
+    if (line.includes('CAPACIDADE TONELADAS') || line.includes('PBT') || line.includes('TONELADAS')) {
+      const numMatch = (lines[i] + ' ' + nextLine).match(/\b(\d{1,2})(?:[,\.]\d+)?\b/);
+      if (numMatch) {
+        const val = parseFloat(numMatch[1].replace(',', '.'));
+        if (val > 0 && val <= 100) pbtVal = val;
       }
     }
   }
 
-  const isBitrem = carretasFound.length >= 2;
-  const carretaStr = isBitrem ? `${carretasFound[0]} / ${carretasFound[1]}` : (carretasFound[0] || '');
+  const allPlates = (textContent.match(PLATE_SEARCH_REGEX) || []).map(p => normalizePlate(p)).filter(Boolean);
+  const uniquePlates = Array.from(new Set(allPlates));
+
+  if (!placaCavalo && uniquePlates.length > 0) {
+    placaCavalo = uniquePlates[0];
+  }
+  if (!placaCarreta1 && uniquePlates.length > 1) {
+    placaCarreta1 = uniquePlates[1];
+  }
+  if (!placaCarreta2 && uniquePlates.length > 2) {
+    placaCarreta2 = uniquePlates[2];
+  }
+
+  const hasC2 = Boolean(placaCarreta2 && placaCarreta2 !== placaCarreta1);
+  const isBitrem = hasC2;
+
+  if (!dataStr) {
+    dataStr = new Date().toLocaleDateString('pt-BR');
+  }
 
   return {
-    placa_cavalo: cavalo,
-    placa_carreta: carretaStr,
+    placa_cavalo: placaCavalo,
+    placa_carreta: isBitrem ? `${placaCarreta1} / ${placaCarreta2}` : placaCarreta1,
     tipo_veiculo: isBitrem ? 'BITREM' : 'SINGLE',
-    modelo_carreta: 'SIDER',
+    modelo_carreta: perfilCarreta,
     volume_cubado: isBitrem ? 175 : 90,
-    numero_pallets: isBitrem ? 48 : 24,
-    pbt: 44,
-    data: new Date().toLocaleDateString('pt-BR'),
-    transportador: '',
-    c1: { placa: carretasFound[0] || '', modelo: 'SIDER', volume: isBitrem ? 87 : 90, pallets: isBitrem ? 24 : 24, pbt: isBitrem ? 22 : 44 },
-    c2: isBitrem ? { placa: carretasFound[1] || '', modelo: 'SIDER', volume: 88, pallets: 24, pbt: 22 } : undefined
+    numero_pallets: capacidadePallets,
+    pbt: pbtVal,
+    data: dataStr,
+    transportador: transportador || 'TRANSMAGNA',
+    c1: { placa: placaCarreta1, modelo: perfilCarreta, volume: isBitrem ? 87 : 90, pallets: isBitrem ? Math.floor(capacidadePallets / 2) : capacidadePallets, pbt: isBitrem ? Math.round(pbtVal / 2) : pbtVal },
+    c2: isBitrem ? { placa: placaCarreta2, modelo: perfilCarreta, volume: Math.round(pbtVal - 87), pallets: Math.ceil(capacidadePallets / 2), pbt: Math.round(pbtVal / 2) } : undefined
   };
 }
 
