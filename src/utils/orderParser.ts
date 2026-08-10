@@ -2,11 +2,15 @@ import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
 import { ParseOrderResult } from '../types';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version || '3.11.174'}/pdf.worker.min.js`;
 
 export async function extractTextFromPdfArrayBuffer(arrayBuffer: ArrayBuffer): Promise<string> {
   try {
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useSystemFonts: true,
+      disableFontFace: true
+    });
     const pdfDoc = await loadingTask.promise;
     let fullText = '';
     for (let i = 1; i <= pdfDoc.numPages; i++) {
@@ -1220,7 +1224,11 @@ export function parseLocalTextOrder(textContent: string): ParseOrderResult {
 export async function parsePDFLocal(file: File): Promise<ParseOrderResult | null> {
   try {
     const arrayBuffer = await file.arrayBuffer();
-    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+    const loadingTask = pdfjsLib.getDocument({ 
+      data: arrayBuffer,
+      useSystemFonts: true,
+      disableFontFace: true
+    });
     const pdfDoc = await loadingTask.promise;
     
     let fullText = '';
