@@ -45,6 +45,7 @@ import { cn } from '../lib/utils';
 interface OrdemColetaProps {
   currentUser?: string;
   isReadOnly?: boolean;
+  onTabChange?: (tab: 'menu' | 'rotas' | 'cubagem' | 'ordem_coleta') => void;
 }
 
 // Slotted Vintage Flat-head Screw Component for authentic industrial look
@@ -61,7 +62,7 @@ function Screw({ className }: { className?: string }) {
   );
 }
 
-export default function OrdemColeta({ currentUser, isReadOnly = false }: OrdemColetaProps) {
+export default function OrdemColeta({ currentUser, isReadOnly = false, onTabChange }: OrdemColetaProps) {
   // Vehicle Mode: Carreta Única (SINGLE) vs Bitrem / Rodotrem (BITREM)
   const [vehicleMode, setVehicleMode] = useState<'SINGLE' | 'BITREM'>('SINGLE');
 
@@ -1017,6 +1018,11 @@ export default function OrdemColeta({ currentUser, isReadOnly = false }: OrdemCo
       setSelectedFileName(null);
       setExtractDetails(null);
 
+      // Redirect to Cubagem tab
+      if (onTabChange) {
+        onTabChange('cubagem');
+      }
+
       setTimeout(() => {
         setExtractSuccessMsg(null);
       }, 5000);
@@ -1773,8 +1779,10 @@ export default function OrdemColeta({ currentUser, isReadOnly = false }: OrdemCo
 
       </div>
 
-      {/* ================= REALTIME DATABASE HISTORY (CARDS / LISTAGEM) ================= */}
-      <div className="w-full rounded-2xl bg-[#eedec7] border-2 border-[#a68a6d] shadow-[4px_6px_16px_rgba(0,0,0,0.25)] p-5 sm:p-6 relative mt-2">
+      {/* ================= REALTIME DATABASE HISTORY (CARDS / LISTAGEM) - HIDDEN BY USER REQUEST ================= */}
+      {false && (
+        <>
+          <div className="w-full rounded-2xl bg-[#eedec7] border-2 border-[#a68a6d] shadow-[4px_6px_16px_rgba(0,0,0,0.25)] p-5 sm:p-6 relative mt-2">
         <Screw className="absolute top-2.5 left-2.5" />
         <Screw className="absolute top-2.5 right-2.5" />
         <Screw className="absolute bottom-2.5 left-2.5" />
@@ -2208,6 +2216,8 @@ export default function OrdemColeta({ currentUser, isReadOnly = false }: OrdemCo
 
           </div>
         </div>
+      )}
+        </>
       )}
 
     </div>
