@@ -480,25 +480,34 @@ export const CubagemTableRow: React.FC<CubagemTableRowProps> = ({
       {/* Actions */}
       <td className="px-3 py-3.5 align-middle text-center">
         {!isReadOnly && (
-          <div className="flex items-center justify-center gap-1">
-            <button
-              type="button"
-              onClick={onStartEdit}
-              className="p-1.5 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95"
-              title="Editar Registro"
-            >
-              <Edit size={12} className="stroke-[2.5]" />
-            </button>
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => onDelete(item.items.map((sub) => sub.id))}
-                className="p-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95"
-                title="Excluir Registro"
-              >
-                <Trash2 size={12} className="stroke-[2.5]" />
-              </button>
-            )}
+          <div className="flex flex-col gap-1.5 items-center justify-center">
+            {parsedData.carretas.map((c, idx) => (
+              <div key={idx} className="flex items-center gap-1.5 min-h-[32px]">
+                {parsedData.isBitrem && (
+                  <span className="text-[7.5px] font-black uppercase text-[#5c3c24]/70 bg-[#5c3c24]/10 px-1 py-0.2 rounded shrink-0">
+                    {c.tag || `C${idx + 1}`}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={onStartEdit}
+                  className="p-1 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95"
+                  title={`Editar ${c.tag}`}
+                >
+                  <Edit size={10} className="stroke-[2.5]" />
+                </button>
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => onDelete([c.id])}
+                    className="p-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg transition-all cursor-pointer shadow-sm active:scale-95"
+                    title={`Excluir ${c.tag}`}
+                  >
+                    <Trash2 size={10} className="stroke-[2.5]" />
+                  </button>
+                )}
+              </div>
+            ))}
           </div>
         )}
       </td>

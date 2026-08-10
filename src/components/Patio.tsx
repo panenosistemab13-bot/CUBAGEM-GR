@@ -348,7 +348,7 @@ const getAutoGreeting = (): 'bom dia' | 'boa tarde' | 'boa noite' => {
 };
 
 export default function Patio({ onBack, isReadOnly = false, currentUser }: PatioProps) {
-  const isAdmin = currentUser === 'jeff';
+  const isAdmin = currentUser === 'jeff' || currentUser === 'Grupo GR';
   const principle = useCurrentPrinciple();
   const [patioData, setPatioData] = useState<PatioItem[]>([]);
   const [pasteText, setPasteText] = useState('');
@@ -1041,6 +1041,10 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
 
   const handleClearAllCubagem = async () => {
     if (isReadOnly || !isAdmin) return;
+    if (currentUser !== 'jeff') {
+      alert("Apenas o administrador Jeff pode limpar a base de dados.");
+      return;
+    }
     if (window.confirm("Tem certeza que deseja apagar TODAS as informações salvas na aba de cubagem? Esta ação não pode ser desfeita.")) {
       try {
         await remove(ref(db, 'patio/cubagem'));
@@ -1592,6 +1596,10 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
 
   const handleClearAll = async () => {
     if (isReadOnly || !isAdmin) return;
+    if (currentUser !== 'jeff') {
+      alert("Apenas o administrador Jeff pode limpar a base de dados.");
+      return;
+    }
     try {
       await remove(ref(db, 'patio/veiculos'));
       setPasteText('');
@@ -2405,7 +2413,7 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                     Executar Lote
                   </motion.button>
                   
-                  {isAdmin && (
+                  {isAdmin && currentUser === 'jeff' && (
                     <button 
                       onClick={handleClearAll}
                       className="w-full py-2.5 text-[#5c3c24] hover:text-[#8c060a] hover:border-[#8c060a]/30 font-black text-[10px] uppercase tracking-[0.25em] border-2 border-[#5c3c24]/20 rounded-xl bg-[#f0e3d2]/60 hover:bg-[#ebd9c3] transition-all cursor-pointer shadow-sm"
@@ -3700,7 +3708,7 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
-                  {cubagemData.length > 0 && !isReadOnly && isAdmin && (
+                  {cubagemData.length > 0 && !isReadOnly && isAdmin && currentUser === 'jeff' && (
                     <button
                       type="button"
                       onClick={handleClearAllCubagem}
@@ -4279,17 +4287,57 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                                         <LicensePlate plate={item.cavalo} type="cavalo" />
                                       </div>
 
-                                      <div className="flex flex-col gap-1.5">
+                                      <div className="flex flex-col gap-1.5 w-full">
                                         <span className="text-[7px] font-black text-[#5c3c24]/50 uppercase tracking-widest pl-1">Carreta(s)</span>
-                                        <div className="flex flex-col gap-1.5">
+                                        <div className="flex flex-col gap-2">
                                           {item.items.map((sub, idx) => (
-                                            <div key={sub.id} className="flex items-center gap-1.5">
-                                              {item.items.length > 1 && (
-                                                <span className="text-[8px] font-black uppercase text-[#8B0000] bg-[#f8d7da] border border-[#f5c6cb] px-1 py-0.5 rounded font-sans shrink-0">
-                                                  C{idx + 1}
-                                                </span>
+                                            <div key={sub.id} className="flex items-center justify-between gap-2 bg-[#f0dfcc]/15 p-1.5 rounded-lg border border-[#5c3c24]/5">
+                                              <div className="flex items-center gap-1.5">
+                                                {item.items.length > 1 && (
+                                                  <span className="text-[8px] font-black uppercase text-[#8B0000] bg-[#f8d7da] border border-[#f5c6cb] px-1 py-0.5 rounded font-sans shrink-0">
+                                                    C{idx + 1}
+                                                  </span>
+                                                )}
+                                                <LicensePlate plate={sub.carreta} type="carreta" size="sm" />
+                                              </div>
+                                              
+                                              {!isReadOnly && (
+                                                <div className="flex items-center gap-1">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      setEditingCubagemId(item.id);
+                                                      setEditingCavalo(item.cavalo);
+                                                      setEditingGroupItems(item.items.map(s => ({ 
+                                                        id: s.id, 
+                                                        carreta: s.carreta, 
+                                                        m3: s.m3,
+                                                        mes: s.mes || '',
+                                                        dia: s.dia || '',
+                                                        data: s.data || '',
+                                                        transportador: s.transportador || '',
+                                                        pallets: s.pallets || '',
+                                                        pbt: s.pbt || '',
+                                                        modeloCarreta: s.modeloCarreta || ''
+                                                      })));
+                                                    }}
+                                                    className="p-1 bg-stone-100 hover:bg-stone-200 border border-stone-200 text-stone-700 rounded-lg active:scale-95 transition-all"
+                                                    title="Editar esta Carreta"
+                                                  >
+                                                    <Edit size={10} />
+                                                  </button>
+                                                  {isAdmin && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => handleDeleteCubagem([sub.id])}
+                                                      className="p-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-600 rounded-lg active:scale-95 transition-all"
+                                                      title="Excluir esta Carreta"
+                                                    >
+                                                      <Trash2 size={10} />
+                                                    </button>
+                                                  )}
+                                                </div>
                                               )}
-                                              <LicensePlate plate={sub.carreta} type="carreta" size="sm" />
                                             </div>
                                           ))}
                                         </div>
