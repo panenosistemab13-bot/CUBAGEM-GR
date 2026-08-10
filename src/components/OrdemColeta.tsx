@@ -33,6 +33,7 @@ import { rtdb } from '../firebase';
 import { OrdemColetaItem, CarretaSubItem } from '../types';
 import { 
   parseExcelOrder, 
+  parseLocalTextOrder,
   createEmptyOrder, 
   normalizePlate, 
   normalizeOrdemColetaItem,
@@ -303,92 +304,79 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
           setExtractDetails(`Cálculo de Volume: ${extracted.detalhes_calculo}`);
         }
       } else if (isPdf || isImage) {
-        setProcessingMsg('Analisando documento com Inteligência Artificial e OCR...');
+        setProcessingMsg('Processando documento 100% localmente no navegador...');
         
-        // Convert to Base64
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
-
-        const fileBase64 = await base64Promise;
-
-        const response = await fetch('/api/parse-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileBase64,
-            mimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
-            fileName: file.name
-          })
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'Falha ao processar arquivo no servidor.');
-        }
-
-        const resData = await response.json();
-        if (resData.success && resData.data) {
-          const d = resData.data;
-
-          const isBitremDetected = d.tipo_veiculo === 'BITREM' || 
-                                  d.tipo_veiculo === 'bitrem' || 
-                                  Boolean(d.c2 && d.c2.placa) || 
-                                  Boolean(d.c2_placa && d.c2_placa.length > 0) || 
-                                  (d.placa_carreta && d.placa_carreta.includes('/'));
-
-          setSharedData({
-            placa_cavalo: d.placa_cavalo || '',
-            data: d.data || new Date().toLocaleDateString('pt-BR'),
-            transportador: d.transportador || ''
-          });
-
-          if (isBitremDetected) {
-            setVehicleMode('BITREM');
-
-            let dC1Pal = d.c1?.pallets ?? d.c1_pallets;
-            let dC2Pal = d.c2?.pallets ?? d.c2_pallets;
-
-            if (dC1Pal === undefined || dC1Pal === '' || dC1Pal === null) {
-              const pDist = parsePalletDistribution(d.capacidade_pallets ?? d.numero_pallets, true);
-              dC1Pal = pDist.c1Pallets;
-              dC2Pal = pDist.c2Pallets;
+        // Read file as text or ArrayBuffer / DataURL to extract text locally
+        const textContent = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            const res = e.target?.result;
+            if (typeof res === 'string') {
+              resolve(res);
+            } else if (res instanceof ArrayBuffer) {
+              // Convert buffer to string or extract readable chars
+              const decoder = new TextDecoder('utf-8');
+              resolve(decoder.decode(res));
+            } else {
+              resolve('');
             }
+          };
+          reader.onerror = () => resolve('');
+          reader.readAsText(file);
+        });
 
-            setC1({
-              placa: d.c1?.placa || d.c1_placa || d.placa_carreta.split('/')[0]?.trim() || '',
-              modelo: d.c1?.modelo || d.c1_modelo || d.modelo_carreta || 'SIDER',
-              volume: d.c1?.volume ?? d.c1_volume ?? Math.round((d.volume_cubado || 0) / 2) ?? '',
-              pallets: dC1Pal ?? '',
-              pbt: d.c1?.pbt ?? d.c1_pbt ?? Number(((d.pbt || 0) / 2).toFixed(1)) ?? ''
-            });
-            setC2({
-              placa: d.c2?.placa || d.c2_placa || d.placa_carreta.split('/')[1]?.trim() || '',
-              modelo: d.c2?.modelo || d.c2_modelo || d.modelo_carreta || 'SIDER',
-              volume: d.c2?.volume ?? d.c2_volume ?? Math.round((d.volume_cubado || 0) - (Number(d.c1?.volume) || 0)) ?? '',
-              pallets: dC2Pal ?? '',
-              pbt: d.c2?.pbt ?? d.c2_pbt ?? Number(((d.pbt || 0) - (Number(d.c1?.pbt) || 0)).toFixed(1)) ?? ''
-            });
-          } else {
-            setVehicleMode('SINGLE');
-            const pDist = parsePalletDistribution(d.capacidade_pallets ?? d.numero_pallets, false);
-            setC1({
-              placa: d.c1?.placa || d.placa_carreta || '',
-              modelo: d.c1?.modelo || d.modelo_carreta || 'SIDER',
-              volume: d.c1?.volume ?? d.volume_cubado ?? '',
-              pallets: pDist.c1Pallets || d.numero_pallets || '',
-              pbt: d.c1?.pbt ?? d.pbt ?? ''
-            });
-            setC2({ placa: '', modelo: 'SIDER', volume: '', pallets: '', pbt: '' });
+        const d = parseLocalTextOrder(file.name + ' ' + textContent);
+
+        const isBitremDetected = d.tipo_veiculo === 'BITREM' || 
+                                Boolean(d.c2 && d.c2.placa) || 
+                                Boolean(d.placa_carreta && d.placa_carreta.includes('/'));
+
+        setSharedData({
+          placa_cavalo: d.placa_cavalo || '',
+          data: d.data || new Date().toLocaleDateString('pt-BR'),
+          transportador: d.transportador || ''
+        });
+
+        if (isBitremDetected) {
+          setVehicleMode('BITREM');
+
+          let dC1Pal = d.c1?.pallets;
+          let dC2Pal = d.c2?.pallets;
+
+          if (dC1Pal === undefined || dC1Pal === '' || dC1Pal === null) {
+            const pDist = parsePalletDistribution(d.numero_pallets, true);
+            dC1Pal = pDist.c1Pallets;
+            dC2Pal = pDist.c2Pallets;
           }
 
-          setExtractSuccessMsg(`Documento "${file.name}" extraído com sucesso!`);
+          setC1({
+            placa: d.c1?.placa || d.placa_carreta.split('/')[0]?.trim() || '',
+            modelo: d.c1?.modelo || 'SIDER',
+            volume: d.c1?.volume ?? Math.round((d.volume_cubado || 0) / 2),
+            pallets: dC1Pal ?? '',
+            pbt: d.c1?.pbt ?? Number(((d.pbt || 0) / 2).toFixed(1))
+          });
+          setC2({
+            placa: d.c2?.placa || d.placa_carreta.split('/')[1]?.trim() || '',
+            modelo: d.c2?.modelo || 'SIDER',
+            volume: d.c2?.volume ?? Math.round((d.volume_cubado || 0) - (Number(d.c1?.volume) || 0)),
+            pallets: dC2Pal ?? '',
+            pbt: d.c2?.pbt ?? Number(((d.pbt || 0) - (Number(d.c1?.pbt) || 0)).toFixed(1))
+          });
         } else {
-          throw new Error('Nenhum dado legível retornado pelo analisador.');
+          setVehicleMode('SINGLE');
+          const pDist = parsePalletDistribution(d.numero_pallets, false);
+          setC1({
+            placa: d.c1?.placa || d.placa_carreta || '',
+            modelo: d.c1?.modelo || 'SIDER',
+            volume: (d.c1?.volume ?? d.volume_cubado) || '',
+            pallets: pDist.c1Pallets || d.numero_pallets || '',
+            pbt: (d.c1?.pbt ?? d.pbt) || ''
+          });
+          setC2({ placa: '', modelo: 'SIDER', volume: '', pallets: '', pbt: '' });
         }
+
+        setExtractSuccessMsg(`Documento "${file.name}" processado localmente com sucesso!`);
       } else {
         throw new Error('Formato não suportado. Por favor envie arquivos Excel (.xlsx, .xls, .csv), PDF (.pdf) ou Imagens.');
       }

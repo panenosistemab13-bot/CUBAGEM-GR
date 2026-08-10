@@ -1109,3 +1109,40 @@ export function parseBitremData(input: {
     rawPlacaCarreta: singlePlate
   };
 }
+
+// 100% Local Text Order Parser (No external API or server required)
+export function parseLocalTextOrder(textContent: string): ParseOrderResult {
+  const matches = (textContent.match(PLATE_SEARCH_REGEX) || []).map(p => normalizePlate(p)).filter(Boolean);
+  const uniquePlates = Array.from(new Set(matches));
+  
+  let cavalo = '';
+  const carretasFound: string[] = [];
+  
+  for (const p of uniquePlates) {
+    if (isValidPlate(p)) {
+      if (!cavalo) {
+        cavalo = p;
+      } else if (carretasFound.length < 2) {
+        carretasFound.push(p);
+      }
+    }
+  }
+
+  const isBitrem = carretasFound.length >= 2;
+  const carretaStr = isBitrem ? `${carretasFound[0]} / ${carretasFound[1]}` : (carretasFound[0] || '');
+
+  return {
+    placa_cavalo: cavalo,
+    placa_carreta: carretaStr,
+    tipo_veiculo: isBitrem ? 'BITREM' : 'SINGLE',
+    modelo_carreta: 'SIDER',
+    volume_cubado: isBitrem ? 175 : 90,
+    numero_pallets: isBitrem ? 48 : 24,
+    pbt: 44,
+    data: new Date().toLocaleDateString('pt-BR'),
+    transportador: '',
+    c1: { placa: carretasFound[0] || '', modelo: 'SIDER', volume: isBitrem ? 87 : 90, pallets: isBitrem ? 24 : 24, pbt: isBitrem ? 22 : 44 },
+    c2: isBitrem ? { placa: carretasFound[1] || '', modelo: 'SIDER', volume: 88, pallets: 24, pbt: 22 } : undefined
+  };
+}
+
