@@ -344,16 +344,18 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
             dC2Pal = pDist.c2Pallets;
           }
 
+          const modeloExtraidol = d.modelo_carreta || d.modelo || ( /BAU|BAÚ/i.test(JSON.stringify(d)) ? 'BAU' : 'SIDER');
+
           setC1({
-            placa: d.c1?.placa || d.placa_carreta.split('/')[0]?.trim() || '',
-            modelo: d.c1?.modelo || 'SIDER',
+            placa: d.c1?.placa || d.placa_c1 || d.placa_carreta.split('/')[0]?.trim() || '',
+            modelo: d.c1?.modelo || modeloExtraidol,
             volume: d.c1?.volume ?? Math.round((d.volume_cubado || 0) / 2),
             pallets: dC1Pal ?? '',
             pbt: d.c1?.pbt ?? Number(((d.pbt || 0) / 2).toFixed(1))
           });
           setC2({
-            placa: d.c2?.placa || d.placa_carreta.split('/')[1]?.trim() || '',
-            modelo: d.c2?.modelo || 'SIDER',
+            placa: d.c2?.placa || d.placa_c2 || d.placa_carreta.split('/')[1]?.trim() || '',
+            modelo: d.c2?.modelo || modeloExtraidol,
             volume: d.c2?.volume ?? Math.round((d.volume_cubado || 0) - (Number(d.c1?.volume) || 0)),
             pallets: dC2Pal ?? '',
             pbt: d.c2?.pbt ?? Number(((d.pbt || 0) - (Number(d.c1?.pbt) || 0)).toFixed(1))
@@ -361,9 +363,11 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
         } else {
           setVehicleMode('SINGLE');
           const pDist = parsePalletDistribution(d.numero_pallets, false);
+          const modeloExtraidol = d.modelo_carreta || d.modelo || ( /BAU|BAÚ/i.test(JSON.stringify(d)) ? 'BAU' : 'SIDER');
+          
           setC1({
-            placa: d.c1?.placa || d.placa_carreta || '',
-            modelo: d.c1?.modelo || 'SIDER',
+            placa: d.c1?.placa || d.placa_c1 || d.placa_carreta || '',
+            modelo: d.c1?.modelo || modeloExtraidol,
             volume: (d.c1?.volume ?? d.volume_cubado) || '',
             pallets: pDist.c1Pallets || d.numero_pallets || '',
             pbt: (d.c1?.pbt ?? d.pbt) || ''

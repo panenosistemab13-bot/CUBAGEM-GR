@@ -34,7 +34,7 @@ export function normalizePlate(str: string): string {
 
 // Strict Regex for Brazilian Standard (ABC1234) and Mercosul (ABC1D23 / JAT4G68)
 export const BRAZIL_PLATE_REGEX = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/i;
-export const PLATE_SEARCH_REGEX = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}-?[0-9]{4}/gi;
+export const PLATE_SEARCH_REGEX = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/gi;
 export const PLATE_REGEX = PLATE_SEARCH_REGEX;
 
 // Validates if a string is strictly a Brazilian/Mercosul plate
@@ -1139,10 +1139,10 @@ export function parseBitremData(input: {
 export function parseLocalTextOrder(textContent: string): ParseOrderResult {
   const upperText = textContent.toUpperCase();
   
-  // 1. Global Plates via /\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/gi
-  const rawPlateMatches = (textContent.match(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/gi) || []);
+  // 1. Global Plates via /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/gi
+  const rawPlateMatches = (textContent.match(/[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/gi) || []);
   const normalizedPlates = rawPlateMatches.map(p => normalizePlate(p)).filter(Boolean);
-  const uniquePlates = Array.from(new Set(normalizedPlates)).filter(p => isValidPlate(p));
+  const uniquePlates = Array.from(new Set(normalizedPlates)).filter(p => isValidPlate(p) || /^[A-Z]{3}[0-9]{4}$/i.test(p));
 
   const placaCavalo = uniquePlates[0] || '';
   const placaCarreta1 = uniquePlates[1] || '';
@@ -1241,8 +1241,9 @@ export async function parsePDFLocal(file: File): Promise<ParseOrderResult | null
 
     console.log("Texto extraído localmente do PDF:", fullText);
 
-    const placas = fullText.match(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/gi) || [];
-    const placasUnicas = [...new Set(placas.map(p => p.toUpperCase()))].filter(p => isValidPlate(p));
+    const regexPlacas = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/gi;
+    const placasEncontradas = fullText.match(regexPlacas) || [];
+    const placasLimpas = [...new Set(placasEncontradas.map(p => p.toUpperCase()))];
 
     const matchData = fullText.match(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/);
     
@@ -1254,9 +1255,9 @@ export async function parsePDFLocal(file: File): Promise<ParseOrderResult | null
     const matchPallets = fullText.match(/CAPACIDADE\s*PALLETS[^\d]*(\d+)/i) || fullText.match(/PALLETS[^\d]*(\d+)/i);
     const matchTon = fullText.match(/CAPACIDADE\s*TONELADAS[^\d]*(\d+)/i) || fullText.match(/TONELADAS[^\d]*(\d+)/i);
 
-    const placaCavalo = placasUnicas[0] || '';
-    const placaC1 = placasUnicas[1] || '';
-    const placaC2 = placasUnicas[2] || '';
+    const placaCavalo = placasLimpas[0] || '';
+    const placaC1 = placasLimpas[1] || '';
+    const placaC2 = placasLimpas[2] || '';
     const temDuasCarretas = Boolean(placaC2 && placaC2 !== placaC1);
     const pallets = matchPallets ? parseInt(matchPallets[1], 10) : 28;
     const pbt = matchTon ? parseFloat(matchTon[1]) : 30;
