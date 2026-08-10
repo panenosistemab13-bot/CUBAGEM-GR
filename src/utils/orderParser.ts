@@ -1142,14 +1142,14 @@ export function parseLocalTextOrder(textContent: string): ParseOrderResult {
   // 1. Global Plates via /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/gi
   const rawPlateMatches = (textContent.match(/[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/gi) || []);
   const normalizedPlates = rawPlateMatches.map(p => normalizePlate(p)).filter(Boolean);
-  const uniquePlates = Array.from(new Set(normalizedPlates)).filter(p => isValidPlate(p) || /^[A-Z]{3}[0-9]{4}$/i.test(p));
+  const uniquePlates = Array.from(new Set(normalizedPlates));
 
   const placaCavalo = uniquePlates[0] || '';
   const placaCarreta1 = uniquePlates[1] || '';
   const placaCarreta2 = uniquePlates[2] || '';
 
-  const hasC2 = Boolean(placaCarreta2 && placaCarreta2 !== placaCarreta1);
-  const isBitrem = hasC2;
+  const isBitrem = Boolean(placaCarreta2 && placaCarreta2 !== placaCarreta1);
+  const modeloExtraido = /BAU|BAÚ/i.test(textContent) ? 'BAU' : 'SIDER';
 
   // 2. Date extraction (e.g. 6/8/2026 or 06/08/2026)
   let dataStr = '';
@@ -1209,15 +1209,17 @@ export function parseLocalTextOrder(textContent: string): ParseOrderResult {
   return {
     placa_cavalo: placaCavalo,
     placa_carreta: isBitrem ? `${placaCarreta1} / ${placaCarreta2}` : placaCarreta1,
+    placa_c1: placaCarreta1,
+    placa_c2: placaCarreta2,
     tipo_veiculo: isBitrem ? 'BITREM' : 'SINGLE',
-    modelo_carreta: perfilCarreta,
+    modelo_carreta: modeloExtraido,
     volume_cubado: isBitrem ? 175 : 90,
     numero_pallets: capacidadePallets,
     pbt: pbtVal,
-    data: dataStr,
+    data: dataStr || new Date().toLocaleDateString('pt-BR'),
     transportador: transportador,
-    c1: { placa: placaCarreta1, modelo: perfilCarreta, volume: isBitrem ? 87 : 90, pallets: isBitrem ? Math.floor(capacidadePallets / 2) : capacidadePallets, pbt: isBitrem ? Math.round(pbtVal / 2) : pbtVal },
-    c2: isBitrem ? { placa: placaCarreta2, modelo: perfilCarreta, volume: Math.round(pbtVal - 87), pallets: Math.ceil(capacidadePallets / 2), pbt: Math.round(pbtVal / 2) } : undefined
+    c1: { placa: placaCarreta1, modelo: modeloExtraido, volume: isBitrem ? 87 : 90, pallets: isBitrem ? Math.floor(capacidadePallets / 2) : capacidadePallets, pbt: isBitrem ? Math.round(pbtVal / 2) : pbtVal },
+    c2: isBitrem ? { placa: placaCarreta2, modelo: modeloExtraido, volume: Math.round(pbtVal - 87), pallets: Math.ceil(capacidadePallets / 2), pbt: Math.round(pbtVal / 2) } : undefined
   };
 }
 
@@ -1266,6 +1268,8 @@ export async function parsePDFLocal(file: File): Promise<ParseOrderResult | null
     return {
       placa_cavalo: placaCavalo,
       placa_carreta: temDuasCarretas ? `${placaC1} / ${placaC2}` : placaC1,
+      placa_c1: placaC1,
+      placa_c2: placaC2,
       tipo_veiculo: temDuasCarretas ? 'BITREM' : 'SINGLE',
       modelo_carreta: modelo,
       volume_cubado: temDuasCarretas ? 175 : 90,
