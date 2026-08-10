@@ -336,9 +336,19 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
 
           // LIMPEZA AGRESSIVA PARA CAPTURA DE PLACAS E MODELO
           const textoLimpo = fullText.replace(/[\s\-]/g, '').toUpperCase();
-          const regexPlacaAgressivo = /[A-Z]{3}[0-9][A-Z0-9][0-9]{2}|[A-Z]{3}[0-9]{4}/g;
-          const placasEncontradas = textoLimpo.match(regexPlacaAgressivo) || [];
-          const placasLimpas = [...new Set(placasEncontradas)];
+          
+          // Extrator deslizante de 7 caracteres para evitar desalinhamentos ou colunas grudadas
+          const todasAsPlacas: string[] = [];
+          for (let i = 0; i <= textoLimpo.length - 7; i++) {
+            todasAsPlacas.push(textoLimpo.substring(i, i + 7));
+          }
+
+          const placasValidas = todasAsPlacas.filter(p => 
+            /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/.test(p) || 
+            /^[A-Z]{3}[0-9]{4}$/.test(p)
+          );
+          const placasLimpas = [...new Set(placasValidas)];
+          console.log("Placas encontradas via varredura deslizante (OrdemColeta):", placasLimpas);
 
           const matchData = fullText.match(/\b(\d{1,2}\/\d{1,2}\/\d{4})\b/);
           
