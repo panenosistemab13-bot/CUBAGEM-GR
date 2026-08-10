@@ -41,9 +41,6 @@ export interface OrdemColetaItem {
 export interface ParseOrderResult {
   placa_cavalo: string;
   placa_carreta: string;
-  placa_c1?: string;
-  placa_c2?: string;
-  modelo?: string;
   volume_cubado: number;
   data: string;
   transportador: string;
