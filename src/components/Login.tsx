@@ -121,7 +121,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 disabled={isSubmitting}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: grupogr"
+                placeholder="Digite seu usuário"
                 className="w-full pl-10 pr-4 py-3 bg-[#FCF7ED] border-2 border-[#5c3c24]/30 focus:border-[#B32025] outline-none rounded-xl text-sm font-semibold text-[#2D1A10] placeholder-[#3A2414]/40 transition-colors shadow-inner"
               />
             </div>
@@ -143,7 +143,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 disabled={isSubmitting}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Sua senha"
+                placeholder="Digite sua senha"
                 className="w-full pl-10 pr-10 py-3 bg-[#FCF7ED] border-2 border-[#5c3c24]/30 focus:border-[#B32025] outline-none rounded-xl text-sm font-semibold text-[#2D1A10] placeholder-[#3A2414]/40 transition-colors shadow-inner"
               />
               <button
@@ -185,7 +185,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         {/* Info footer */}
         <div className="bg-[#EAD8B8]/20 border-t border-[#3A2414]/5 px-8 py-4.5 text-center text-[10px] text-[#6B4423]/70 font-mono font-bold">
-          ACESSO RESTRITO • GRUPO GR & PCP
+          • ACESSO RESTRITO •
         </div>
       </motion.div>
     </div>

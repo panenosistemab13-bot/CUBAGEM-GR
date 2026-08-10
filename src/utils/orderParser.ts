@@ -955,8 +955,9 @@ export function parseBitremData(input: {
   const rawPbtStr = String(input.pbt ?? '').replace(',', '.');
   const totalPbt = parseFloat(rawPbtStr) || 0;
 
-  // Check if plate string contains slash '/' or multiple plates
-  const plates = rawCarreta.split(/[/,;+&]/).map(p => normalizePlate(p)).filter(Boolean);
+  // Check if plate string contains slash '/' or multiple plates with strict deduplication
+  const rawPlates = rawCarreta.split(/[/,;+&]/).map(p => normalizePlate(p)).filter(Boolean);
+  const plates = Array.from(new Set(rawPlates));
 
   const hasMultiplePlates = plates.length >= 2;
   const hasExplicitC2 = Boolean(input.c2_placa && normalizePlate(input.c2_placa));
@@ -964,7 +965,7 @@ export function parseBitremData(input: {
 
   if (isBitrem && (hasMultiplePlates || hasExplicitC2)) {
     const p1 = input.c1_placa ? normalizePlate(input.c1_placa) : (plates[0] || '');
-    const p2 = input.c2_placa ? normalizePlate(input.c2_placa) : (plates[1] || '');
+    const p2 = input.c2_placa ? normalizePlate(input.c2_placa) : (plates[1] || plates[0] || '');
 
     // Volumes: use individual if provided, otherwise half of total each
     let numV1: number;
@@ -1032,6 +1033,7 @@ export function parseBitremData(input: {
     const m1 = (input.c1_modelo || cleanModelo).toUpperCase();
     const m2 = (input.c2_modelo || cleanModelo).toUpperCase();
 
+    // STRICT LIMIT: Max 2 carretas (C1 and C2)
     const carretas: CarretaItem[] = [
       {
         tag: 'C1',
@@ -1049,7 +1051,7 @@ export function parseBitremData(input: {
         pbt: numPbt2 || (totalPbt ? String(numPbt2) : '---'),
         volume: numV2
       }
-    ];
+    ].slice(0, 2);
 
     const calculatedTotalVol = numV1 + numV2;
     const calculatedTotalPal = numPal1 + numPal2;
@@ -1064,7 +1066,7 @@ export function parseBitremData(input: {
       totalVolume: calculatedTotalVol || totalVol,
       totalPallets: calculatedTotalPal || totalPal,
       totalPbt: calculatedTotalPbt || totalPbt,
-      rawPlacaCarreta: `${p1} / ${p2}`
+      rawPlacaCarreta: p1 && p2 && p1 !== p2 ? `${p1} / ${p2}` : (p1 || p2)
     };
   }
 
