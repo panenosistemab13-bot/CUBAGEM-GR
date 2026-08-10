@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI, Type } from "@google/genai";
 import { createRequire } from "module";
+import pdfToExcelHandler from "./api/pdf-to-excel.js";
 
 const require = createRequire(import.meta.url);
 const pdf = require("pdf-parse");
@@ -18,6 +19,14 @@ async function startServer() {
   // API routes go here FIRST
   app.get("/api/health", (req, res) => {
     res.json({ status: "ok" });
+  });
+
+  app.post("/api/pdf-to-excel", async (req, res) => {
+    try {
+      await pdfToExcelHandler(req as any, res as any);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   });
 
   app.post("/api/extract-table", async (req, res) => {

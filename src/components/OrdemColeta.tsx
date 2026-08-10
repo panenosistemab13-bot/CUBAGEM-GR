@@ -312,95 +312,546 @@ export default function OrdemColeta({ currentUser, isReadOnly = false }: OrdemCo
         if (extracted.detalhes_calculo) {
           setExtractDetails(`Cálculo de Volume: ${extracted.detalhes_calculo}`);
         }
-      } else if (isPdf || isImage) {
-        setProcessingMsg('Analisando documento com Inteligência Artificial e OCR...');
-        
-        // Convert to Base64
+      } else if (isPdf) {
+        setProcessingMsg(
+          'Convertendo PDF para Excel automaticamente...'
+        );
+
+        // -------------------------------------------------------
+        // 1. PDF → Base64
+        // -------------------------------------------------------
+
         const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve, reject) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(file);
-        });
 
-        const fileBase64 = await base64Promise;
+        const fileBase64 = await new Promise<string>(
+          (resolve, reject) => {
+            reader.onload = () => {
+              resolve(reader.result as string);
+            };
 
-        const response = await fetch('/api/parse-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fileBase64,
-            mimeType: file.type || (isPdf ? 'application/pdf' : 'image/jpeg'),
-            fileName: file.name
-          })
-        });
+            reader.onerror = () => {
+              reject(
+                new Error('Não foi possível ler o arquivo PDF.')
+              );
+            };
+
+            reader.readAsDataURL(file);
+          }
+        );
+
+        // -------------------------------------------------------
+        // 2. Envia PDF para a API
+        // -------------------------------------------------------
+
+        setProcessingMsg(
+          'Analisando PDF e criando planilha Excel...'
+        );
+
+        const response = await fetch(
+          '/api/pdf-to-excel',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              fileBase64,
+              mimeType: 'application/pdf',
+              fileName: file.name
+            })
+          }
+        );
 
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || 'Falha ao processar arquivo no servidor.');
+          const errorData =
+            await response.json().catch(() => ({}));
+
+          throw new Error(
+            errorData.error ||
+            `Erro ao converter PDF. Código ${response.status}.`
+          );
         }
 
-        const resData = await response.json();
-        if (resData.success && resData.data) {
-          const d = resData.data;
+        const result = await response.json();
 
-          const isBitremDetected = d.tipo_veiculo === 'BITREM' || 
-                                  d.tipo_veiculo === 'bitrem' || 
-                                  Boolean(d.c2 && d.c2.placa) || 
-                                  Boolean(d.c2_placa && d.c2_placa.length > 0) || 
-                                  (d.placa_carreta && d.placa_carreta.includes('/'));
+        if (
+          !result.success ||
+          !result.xlsxBase64
+        ) {
+          throw new Error(
+            result.error ||
+            'A API não retornou o Excel convertido.'
+          );
+        }
+
+        // -------------------------------------------------------
+        // 3. Converte a resposta Base64 para ArrayBuffer
+        // -------------------------------------------------------
+
+        setProcessingMsg(
+          'Excel criado. Importando os dados...'
+        );
+
+        const binaryString = atob(
+          result.xlsxBase64
+        );
+
+        const bytes = new Uint8Array(
+          binaryString.length
+        );
+
+        for (
+          let i = 0;
+          i < binaryString.length;
+          i++
+        ) {
+          bytes[i] =
+            binaryString.charCodeAt(i);
+        }
+
+        const excelBuffer =
+          bytes.buffer;
+
+        // -------------------------------------------------------
+        // 4. USA O MESMO LEITOR DO EXCEL
+        //
+        // ESTA É A PARTE MAIS IMPORTANTE.
+        //
+        // Não criamos outro sistema de leitura.
+        // Usamos exatamente o parseExcelOrder()
+        // que já funciona no seu aplicativo.
+        // -------------------------------------------------------
+
+        const extracted =
+          parseExcelOrder(excelBuffer);
+
+        if (!extracted) {
+          throw new Error(
+            'O Excel convertido não pôde ser interpretado.'
+          );
+        }
+
+        // -------------------------------------------------------
+        // 5. Preenche os dados exatamente como o Excel atual
+        // -------------------------------------------------------
+
+        const isBitremDetected =
+          extracted.tipo_veiculo === 'BITREM' ||
+          extracted.tipo_veiculo === 'bitrem' ||
+          Boolean(
+            extracted.c2 &&
+            extracted.c2.placa
+          ) ||
+          Boolean(
+            extracted.c2_placa &&
+            extracted.c2_placa.length > 0
+          ) ||
+          (
+            extracted.placa_carreta &&
+            extracted.placa_carreta.includes('/')
+          );
+
+        setSharedData({
+          placa_cavalo:
+            extracted.placa_cavalo || '',
+
+          data:
+            extracted.data ||
+            new Date().toLocaleDateString(
+              'pt-BR'
+            ),
+
+          transportador:
+            extracted.transportador || ''
+        });
+
+        if (isBitremDetected) {
+          setVehicleMode('BITREM');
+
+          let extractedC1Pal =
+            extracted.c1?.pallets ??
+            extracted.c1_pallets;
+
+          let extractedC2Pal =
+            extracted.c2?.pallets ??
+            extracted.c2_pallets;
+
+          if (
+            extractedC1Pal === undefined ||
+            extractedC1Pal === '' ||
+            extractedC1Pal === null
+          ) {
+            const pDist =
+              parsePalletDistribution(
+                extracted.numero_pallets,
+                true
+              );
+
+            extractedC1Pal =
+              pDist.c1Pallets;
+
+            extractedC2Pal =
+              pDist.c2Pallets;
+          }
+
+          setC1({
+            placa:
+              extracted.c1?.placa ||
+              extracted.c1_placa ||
+              extracted.placa_carreta
+                .split('/')[0]
+                ?.trim() ||
+              '',
+
+            modelo:
+              extracted.c1?.modelo ||
+              extracted.c1_modelo ||
+              extracted.modelo_carreta ||
+              'SIDER',
+
+            volume:
+              extracted.c1?.volume ??
+              extracted.c1_volume ??
+              Math.round(
+                (Number(
+                  extracted.volume_cubado
+                ) || 0) / 2
+              ),
+
+            pallets:
+              extractedC1Pal || '',
+
+            pbt:
+              extracted.c1?.pbt ??
+              extracted.c1_pbt ??
+              Number(
+                (
+                  (Number(
+                    extracted.pbt
+                  ) || 0) / 2
+                ).toFixed(1)
+              )
+          });
+
+          setC2({
+            placa:
+              extracted.c2?.placa ||
+              extracted.c2_placa ||
+              extracted.placa_carreta
+                .split('/')[1]
+                ?.trim() ||
+              '',
+
+            modelo:
+              extracted.c2?.modelo ||
+              extracted.c2_modelo ||
+              extracted.modelo_carreta ||
+              'SIDER',
+
+            volume:
+              extracted.c2?.volume ??
+              extracted.c2_volume ??
+              Math.round(
+                (Number(
+                  extracted.volume_cubado
+                ) || 0) / 2
+              ),
+
+            pallets:
+              extractedC2Pal || '',
+
+            pbt:
+              extracted.c2?.pbt ??
+              extracted.c2_pbt ??
+              Number(
+                (
+                  (Number(
+                    extracted.pbt
+                  ) || 0) / 2
+                ).toFixed(1)
+              )
+          });
+
+        } else {
+
+          setVehicleMode('SINGLE');
+
+          setC1({
+            placa:
+              extracted.c1?.placa ||
+              extracted.c1_placa ||
+              extracted.placa_carreta ||
+              '',
+
+            modelo:
+              extracted.c1?.modelo ||
+              extracted.c1_modelo ||
+              extracted.modelo_carreta ||
+              'SIDER',
+
+            volume:
+              extracted.c1?.volume ??
+              extracted.c1_volume ??
+              extracted.volume_cubado ??
+              '',
+
+            pallets:
+              extracted.c1?.pallets ??
+              extracted.c1_pallets ??
+              extracted.numero_pallets ??
+              '',
+
+            pbt:
+              extracted.c1?.pbt ??
+              extracted.c1_pbt ??
+              extracted.pbt ??
+              ''
+          });
+
+          setC2({
+            placa: '',
+            modelo: 'SIDER',
+            volume: '',
+            pallets: '',
+            pbt: ''
+          });
+        }
+
+        // -------------------------------------------------------
+        // 6. Sucesso
+        // -------------------------------------------------------
+
+        setExtractSuccessMsg(
+          `PDF "${file.name}" convertido para Excel e importado com sucesso!`
+        );
+
+        setExtractDetails(
+          'PDF → Excel → importação automática concluída.'
+        );
+
+      } else if (isImage) {
+
+        // -------------------------------------------------------
+        // IMAGENS
+        // Mantém o processamento que você já tinha.
+        // -------------------------------------------------------
+
+        setProcessingMsg(
+          'Analisando imagem com Inteligência Artificial e OCR...'
+        );
+
+        const reader = new FileReader();
+
+        const fileBase64 =
+          await new Promise<string>(
+            (resolve, reject) => {
+              reader.onload = () =>
+                resolve(
+                  reader.result as string
+                );
+
+              reader.onerror = reject;
+
+              reader.readAsDataURL(file);
+            }
+          );
+
+        const response = await fetch(
+          '/api/parse-order',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+            body: JSON.stringify({
+              fileBase64,
+              mimeType:
+                file.type ||
+                'image/jpeg',
+              fileName:
+                file.name
+            })
+          }
+        );
+
+        if (!response.ok) {
+          const errData =
+            await response
+              .json()
+              .catch(() => ({}));
+
+          throw new Error(
+            errData.error ||
+            'Falha ao processar imagem.'
+          );
+        }
+
+        const resData =
+          await response.json();
+
+        if (
+          resData.success &&
+          resData.data
+        ) {
+          const d =
+            resData.data;
+
+          const isBitremDetected =
+            d.tipo_veiculo ===
+              'BITREM' ||
+            d.tipo_veiculo ===
+              'bitrem' ||
+            Boolean(
+              d.c2 &&
+              d.c2.placa
+            ) ||
+            Boolean(
+              d.c2_placa &&
+              d.c2_placa.length > 0
+            ) ||
+            (
+              d.placa_carreta &&
+              d.placa_carreta.includes('/')
+            );
 
           setSharedData({
-            placa_cavalo: d.placa_cavalo || '',
-            data: d.data || new Date().toLocaleDateString('pt-BR'),
-            transportador: d.transportador || ''
+            placa_cavalo:
+              d.placa_cavalo || '',
+
+            data:
+              d.data ||
+              new Date()
+                .toLocaleDateString(
+                  'pt-BR'
+                ),
+
+            transportador:
+              d.transportador || ''
           });
 
           if (isBitremDetected) {
             setVehicleMode('BITREM');
 
-            let dC1Pal = d.c1?.pallets ?? d.c1_pallets;
-            let dC2Pal = d.c2?.pallets ?? d.c2_pallets;
-
-            if (dC1Pal === undefined || dC1Pal === '' || dC1Pal === null) {
-              const pDist = parsePalletDistribution(d.capacidade_pallets ?? d.numero_pallets, true);
-              dC1Pal = pDist.c1Pallets;
-              dC2Pal = pDist.c2Pallets;
-            }
-
             setC1({
-              placa: d.c1?.placa || d.c1_placa || d.placa_carreta.split('/')[0]?.trim() || '',
-              modelo: d.c1?.modelo || d.c1_modelo || d.modelo_carreta || 'SIDER',
-              volume: d.c1?.volume ?? d.c1_volume ?? Math.round((d.volume_cubado || 0) / 2) ?? '',
-              pallets: dC1Pal ?? '',
-              pbt: d.c1?.pbt ?? d.c1_pbt ?? Number(((d.pbt || 0) / 2).toFixed(1)) ?? ''
+              placa:
+                d.c1?.placa ||
+                d.c1_placa ||
+                d.placa_carreta
+                  ?.split('/')[0]
+                  ?.trim() ||
+                '',
+
+              modelo:
+                d.c1?.modelo ||
+                d.c1_modelo ||
+                d.modelo_carreta ||
+                'SIDER',
+
+              volume:
+                d.c1?.volume ??
+                d.c1_volume ??
+                '',
+
+              pallets:
+                d.c1?.pallets ??
+                d.c1_pallets ??
+                '',
+
+              pbt:
+                d.c1?.pbt ??
+                d.c1_pbt ??
+                ''
             });
+
             setC2({
-              placa: d.c2?.placa || d.c2_placa || d.placa_carreta.split('/')[1]?.trim() || '',
-              modelo: d.c2?.modelo || d.c2_modelo || d.modelo_carreta || 'SIDER',
-              volume: d.c2?.volume ?? d.c2_volume ?? Math.round((d.volume_cubado || 0) - (Number(d.c1?.volume) || 0)) ?? '',
-              pallets: dC2Pal ?? '',
-              pbt: d.c2?.pbt ?? d.c2_pbt ?? Number(((d.pbt || 0) - (Number(d.c1?.pbt) || 0)).toFixed(1)) ?? ''
+              placa:
+                d.c2?.placa ||
+                d.c2_placa ||
+                d.placa_carreta
+                  ?.split('/')[1]
+                  ?.trim() ||
+                '',
+
+              modelo:
+                d.c2?.modelo ||
+                d.c2_modelo ||
+                d.modelo_carreta ||
+                'SIDER',
+
+              volume:
+                d.c2?.volume ??
+                d.c2_volume ??
+                '',
+
+              pallets:
+                d.c2?.pallets ??
+                d.c2_pallets ??
+                '',
+
+              pbt:
+                d.c2?.pbt ??
+                d.c2_pbt ??
+                ''
             });
+
           } else {
+
             setVehicleMode('SINGLE');
-            const pDist = parsePalletDistribution(d.capacidade_pallets ?? d.numero_pallets, false);
+
             setC1({
-              placa: d.c1?.placa || d.placa_carreta || '',
-              modelo: d.c1?.modelo || d.modelo_carreta || 'SIDER',
-              volume: d.c1?.volume ?? d.volume_cubado ?? '',
-              pallets: pDist.c1Pallets || d.numero_pallets || '',
-              pbt: d.c1?.pbt ?? d.pbt ?? ''
+              placa:
+                d.c1?.placa ||
+                d.c1_placa ||
+                d.placa_carreta ||
+                '',
+
+              modelo:
+                d.c1?.modelo ||
+                d.c1_modelo ||
+                d.modelo_carreta ||
+                'SIDER',
+
+              volume:
+                d.c1?.volume ??
+                d.c1_volume ??
+                d.volume_cubado ??
+                '',
+
+              pallets:
+                d.c1?.pallets ??
+                d.c1_pallets ??
+                d.numero_pallets ??
+                '',
+
+              pbt:
+                d.c1?.pbt ??
+                d.c1_pbt ??
+                d.pbt ??
+                ''
             });
-            setC2({ placa: '', modelo: 'SIDER', volume: '', pallets: '', pbt: '' });
+
+            setC2({
+              placa: '',
+              modelo: 'SIDER',
+              volume: '',
+              pallets: '',
+              pbt: ''
+            });
           }
 
-          setExtractSuccessMsg(`Documento "${file.name}" extraído com sucesso!`);
+          setExtractSuccessMsg(
+            `Imagem "${file.name}" processada com sucesso!`
+          );
         } else {
-          throw new Error('Nenhum dado legível retornado pelo analisador.');
+          throw new Error(
+            'A IA não conseguiu extrair os dados da imagem.'
+          );
         }
       } else {
-        throw new Error('Formato não suportado. Por favor envie arquivos Excel (.xlsx, .xls, .csv), PDF (.pdf) ou Imagens.');
+        throw new Error(
+          'Formato de arquivo não suportado. Use Excel, CSV, PDF ou imagem.'
+        );
       }
     } catch (err: any) {
       console.error("Erro na extração:", err);
