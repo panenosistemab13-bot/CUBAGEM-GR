@@ -37,7 +37,8 @@ import {
   normalizePlate, 
   normalizeOrdemColetaItem,
   isValidPlate,
-  parsePalletDistribution
+  parsePalletDistribution,
+  formatDateInput
 } from '../utils/orderParser';
 import { LicensePlate } from './LicensePlate';
 import { cn } from '../lib/utils';
@@ -907,8 +908,9 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
                   <input
                     type="text"
                     value={sharedData.data}
-                    onChange={e => setSharedData({ ...sharedData, data: e.target.value })}
+                    onChange={e => setSharedData({ ...sharedData, data: formatDateInput(e.target.value) })}
                     placeholder="Ex: 09/08/2026"
+                    maxLength={10}
                     className="w-full px-3 py-2 rounded-lg bg-white border border-[#8c6039]/40 focus:border-[#8c060a] focus:ring-2 focus:ring-[#8c060a]/20 outline-none font-mono font-bold text-xs text-[#2b180d] transition-all shadow-inner"
                   />
                 </div>

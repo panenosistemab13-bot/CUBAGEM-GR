@@ -1,6 +1,6 @@
 import React from 'react';
 import { Edit, Trash2, Save, X } from 'lucide-react';
-import { parseBitremData, CarretaItem, BitremParseResult } from '../utils/orderParser';
+import { parseBitremData, CarretaItem, BitremParseResult, formatDateInput } from '../utils/orderParser';
 import { cn } from '../lib/utils';
 
 // High-fidelity Mercosul License Plate component
@@ -193,9 +193,10 @@ export const CubagemTableRow: React.FC<CubagemTableRowProps> = ({
                 key={sub.id || idx}
                 type="text"
                 value={sub.data || ''}
+                maxLength={10}
                 onChange={(e) => {
                   const updated = [...editingGroupItems];
-                  updated[idx].data = e.target.value;
+                  updated[idx].data = formatDateInput(e.target.value);
                   setEditingGroupItems(updated);
                 }}
                 placeholder="DD/MM/AAAA"
