@@ -34,6 +34,7 @@ import { OrdemColetaItem, CarretaSubItem } from '../types';
 import { 
   parseExcelOrder, 
   parseLocalTextOrder,
+  parsePDFLocal,
   extractTextFromPdfArrayBuffer,
   createEmptyOrder, 
   normalizePlate, 
@@ -307,22 +308,19 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onNavigat
       } else if (isPdf || isImage) {
         setProcessingMsg('Processando documento 100% localmente no navegador...');
         
-        const arrayBuffer = await new Promise<ArrayBuffer>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as ArrayBuffer);
-          reader.onerror = reject;
-          reader.readAsArrayBuffer(file);
-        });
-
-        let textContent = '';
+        let d: any = null;
         if (isPdf) {
-          textContent = await extractTextFromPdfArrayBuffer(arrayBuffer);
+          d = await parsePDFLocal(file);
         } else {
+          const arrayBuffer = await file.arrayBuffer();
           const decoder = new TextDecoder('utf-8');
-          textContent = decoder.decode(arrayBuffer);
+          const textContent = decoder.decode(arrayBuffer);
+          d = parseLocalTextOrder(file.name + ' ' + textContent);
         }
 
-        const d = parseLocalTextOrder(file.name + ' ' + textContent);
+        if (!d) {
+          throw new Error('Não foi possível extrair os dados do documento.');
+        }
 
         const isBitremDetected = d.tipo_veiculo === 'BITREM' || 
                                 Boolean(d.c2 && d.c2.placa) || 

@@ -2,7 +2,7 @@ import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
 import { ParseOrderResult } from '../types';
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
 export async function extractTextFromPdfArrayBuffer(arrayBuffer: ArrayBuffer): Promise<string> {
   try {
@@ -1133,103 +1133,73 @@ export function parseBitremData(input: {
 
 // 100% Local Text Order Parser (No external API or server required)
 export function parseLocalTextOrder(textContent: string): ParseOrderResult {
-  const lines = textContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const upperText = textContent.toUpperCase();
   
-  let transportador = '';
-  let dataStr = '';
-  let placaCavalo = '';
-  let placaCarreta1 = '';
-  let placaCarreta2 = '';
-  let perfilCarreta = 'SIDER';
-  let capacidadePallets = 24;
-  let pbtVal = 30;
+  // 1. Global Plates via /\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/gi
+  const rawPlateMatches = (textContent.match(/\b[A-Z]{3}[0-9][A-Z0-9][0-9]{2}\b/gi) || []);
+  const normalizedPlates = rawPlateMatches.map(p => normalizePlate(p)).filter(Boolean);
+  const uniquePlates = Array.from(new Set(normalizedPlates)).filter(p => isValidPlate(p));
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].toUpperCase();
-    const nextLine = lines[i + 1] ? lines[i + 1].trim() : '';
-
-    if (line.includes('TRANSPORTADOR') || line === 'TRANSPORTADOR') {
-      if (nextLine && !nextLine.includes(':') && nextLine.length > 2) {
-        transportador = nextLine;
-      } else {
-        const parts = lines[i].split(/[:\-\s]+/);
-        if (parts.length > 1 && parts[parts.length - 1].length > 2) {
-          transportador = parts[parts.length - 1];
-        }
-      }
-    }
-
-    if (line.includes('DATA DE CARREGAMENTO') || line.includes('DATA')) {
-      const dateMatch = (lines[i] + ' ' + nextLine).match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/);
-      if (dateMatch) {
-        const d = dateMatch[1].padStart(2, '0');
-        const m = dateMatch[2].padStart(2, '0');
-        let y = dateMatch[3];
-        if (y.length === 2) y = '20' + y;
-        dataStr = `${d}/${m}/${y}`;
-      }
-    }
-
-    if (line.includes('PLACA CAVALO')) {
-      const match = (lines[i] + ' ' + nextLine).match(PLATE_SEARCH_REGEX);
-      if (match) placaCavalo = normalizePlate(match[0]);
-    }
-
-    if (line.includes('PLACA CARRETA 1') || line.includes('CARRETA 1')) {
-      const match = (lines[i] + ' ' + nextLine).match(PLATE_SEARCH_REGEX);
-      if (match) placaCarreta1 = normalizePlate(match[0]);
-    }
-
-    if (line.includes('PLACA CARRETA 2') || line.includes('CARRETA 2')) {
-      const match = (lines[i] + ' ' + nextLine).match(PLATE_SEARCH_REGEX);
-      if (match) placaCarreta2 = normalizePlate(match[0]);
-    }
-
-    if (line.includes('PERFIL CARRETA') || line.includes('MODELO CARRETA')) {
-      const comb = (lines[i] + ' ' + nextLine).toUpperCase();
-      if (comb.includes('BAU') || comb.includes('BAÚ')) {
-        perfilCarreta = 'BAU';
-      } else if (comb.includes('SIDER')) {
-        perfilCarreta = 'SIDER';
-      }
-    }
-
-    if (line.includes('CAPACIDADE PALLETS') || line.includes('PALLETS')) {
-      const numMatch = (lines[i] + ' ' + nextLine).match(/\b(\d{1,2})\b/);
-      if (numMatch) {
-        const val = parseInt(numMatch[1], 10);
-        if (val > 0 && val <= 100) capacidadePallets = val;
-      }
-    }
-
-    if (line.includes('CAPACIDADE TONELADAS') || line.includes('PBT') || line.includes('TONELADAS')) {
-      const numMatch = (lines[i] + ' ' + nextLine).match(/\b(\d{1,2})(?:[,\.]\d+)?\b/);
-      if (numMatch) {
-        const val = parseFloat(numMatch[1].replace(',', '.'));
-        if (val > 0 && val <= 100) pbtVal = val;
-      }
-    }
-  }
-
-  const allPlates = (textContent.match(PLATE_SEARCH_REGEX) || []).map(p => normalizePlate(p)).filter(Boolean);
-  const uniquePlates = Array.from(new Set(allPlates));
-
-  // Default intelligent assignment for 3C orders (Cavalo first, Carreta1 second, Carreta2 third)
-  if (!placaCavalo && uniquePlates.length > 0) {
-    placaCavalo = uniquePlates[0];
-  }
-  if (!placaCarreta1 && uniquePlates.length > 1) {
-    placaCarreta1 = uniquePlates[1];
-  }
-  if (!placaCarreta2 && uniquePlates.length > 2) {
-    placaCarreta2 = uniquePlates[2];
-  }
+  const placaCavalo = uniquePlates[0] || '';
+  const placaCarreta1 = uniquePlates[1] || '';
+  const placaCarreta2 = uniquePlates[2] || '';
 
   const hasC2 = Boolean(placaCarreta2 && placaCarreta2 !== placaCarreta1);
   const isBitrem = hasC2;
 
-  if (!dataStr) {
+  // 2. Date extraction (e.g. 6/8/2026 or 06/08/2026)
+  let dataStr = '';
+  const dateMatch = upperText.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})\b/);
+  if (dateMatch) {
+    const d = dateMatch[1].padStart(2, '0');
+    const m = dateMatch[2].padStart(2, '0');
+    let y = dateMatch[3];
+    if (y.length === 2) y = '20' + y;
+    dataStr = `${d}/${m}/${y}`;
+  } else {
     dataStr = new Date().toLocaleDateString('pt-BR');
+  }
+
+  // 3. Transportador
+  let transportador = 'TRANSMAGNA';
+  if (upperText.includes('TRANSMAGNA')) transportador = 'TRANSMAGNA';
+  else if (upperText.includes('TRANSPORTADOR')) {
+    const idx = upperText.indexOf('TRANSPORTADOR');
+    if (idx !== -1) {
+      const sub = textContent.slice(idx, idx + 40);
+      const parts = sub.split(/[:\-\n]/);
+      if (parts[1] && parts[1].trim().length > 2) {
+        transportador = parts[1].trim();
+      }
+    }
+  }
+
+  // 4. Perfil / Modelo Carreta
+  let perfilCarreta = 'SIDER';
+  if (upperText.includes('BAU') || upperText.includes('BAÚ')) {
+    perfilCarreta = 'BAU';
+  } else if (upperText.includes('REFRIGERADO') || upperText.includes('FRIGORIFICO')) {
+    perfilCarreta = 'REFRIGERADO';
+  } else if (upperText.includes('GRADE BAIXA')) {
+    perfilCarreta = 'GRADE BAIXA';
+  } else if (upperText.includes('SIDER')) {
+    perfilCarreta = 'SIDER';
+  }
+
+  // 5. Capacidade Pallets
+  let capacidadePallets = 28;
+  const palMatch = upperText.match(/(?:PALLETS|PALETE|PLT)\D*(\d{1,2})/);
+  if (palMatch) {
+    const val = parseInt(palMatch[1], 10);
+    if (val > 0 && val <= 100) capacidadePallets = val;
+  }
+
+  // 6. PBT / Toneladas
+  let pbtVal = 30;
+  const pbtMatch = upperText.match(/(?:TONELADAS|PBT|TON)\D*(\d{1,2})(?:[,\.]\d+)?/);
+  if (pbtMatch) {
+    const val = parseFloat(pbtMatch[1].replace(',', '.'));
+    if (val > 0 && val <= 100) pbtVal = val;
   }
 
   return {
@@ -1241,9 +1211,59 @@ export function parseLocalTextOrder(textContent: string): ParseOrderResult {
     numero_pallets: capacidadePallets,
     pbt: pbtVal,
     data: dataStr,
-    transportador: transportador || 'TRANSMAGNA',
+    transportador: transportador,
     c1: { placa: placaCarreta1, modelo: perfilCarreta, volume: isBitrem ? 87 : 90, pallets: isBitrem ? Math.floor(capacidadePallets / 2) : capacidadePallets, pbt: isBitrem ? Math.round(pbtVal / 2) : pbtVal },
     c2: isBitrem ? { placa: placaCarreta2, modelo: perfilCarreta, volume: Math.round(pbtVal - 87), pallets: Math.ceil(capacidadePallets / 2), pbt: Math.round(pbtVal / 2) } : undefined
   };
 }
+
+export async function parsePDFLocal(file: File): Promise<ParseOrderResult | null> {
+  try {
+    const reader = new FileReader();
+    const base64Promise = new Promise<string>((resolve, reject) => {
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    const fileBase64 = await base64Promise;
+
+    const response = await fetch('/api/parse-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileBase64 })
+    });
+
+    if (!response.ok) {
+      throw new Error('Falha ao processar PDF no servidor.');
+    }
+
+    const resData = await response.json();
+    if (!resData.success) {
+      throw new Error(resData.error || 'Erro ao extrair dados do PDF.');
+    }
+
+    const d = resData;
+    const temDuasCarretas = Boolean(d.placa_c2 && d.placa_c2 !== d.placa_c1);
+    const pallets = parseInt(d.pallets, 10) || 28;
+    const pbt = parseFloat(d.pbt) || 30;
+
+    return {
+      placa_cavalo: d.placa_cavalo || '',
+      placa_carreta: temDuasCarretas ? `${d.placa_c1} / ${d.placa_c2}` : d.placa_c1,
+      tipo_veiculo: temDuasCarretas ? 'BITREM' : 'SINGLE',
+      modelo_carreta: d.modelo || 'SIDER',
+      volume_cubado: temDuasCarretas ? 175 : 90,
+      numero_pallets: pallets,
+      pbt: pbt,
+      data: d.data || new Date().toLocaleDateString('pt-BR'),
+      transportador: d.transportador || 'TRANSMAGNA',
+      c1: { placa: d.placa_c1, modelo: d.modelo || 'SIDER', volume: temDuasCarretas ? 87 : 90, pallets: temDuasCarretas ? Math.floor(pallets / 2) : pallets, pbt: temDuasCarretas ? Math.round(pbt / 2) : pbt },
+      c2: temDuasCarretas ? { placa: d.placa_c2, modelo: d.modelo || 'SIDER', volume: Math.round(pbt - 87), pallets: Math.ceil(pallets / 2), pbt: Math.round(pbt / 2) } : undefined
+    };
+  } catch (err) {
+    console.error("Erro ao ler PDF via /api/parse-pdf:", err);
+    return null;
+  }
+}
+
 
