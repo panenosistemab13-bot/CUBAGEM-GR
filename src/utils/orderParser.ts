@@ -659,8 +659,8 @@ export function parseExcelOrder(dataBuffer: ArrayBuffer | Uint8Array): ParseOrde
                    modeloCarreta.includes('9 EIXOS') ||
                    hasPalletsSlash;
 
-  const c1Volume = isBitrem ? Math.round(volumeCubado / 2) : Math.round(volumeCubado);
-  const c2Volume = isBitrem ? Math.round(volumeCubado - c1Volume) : 0;
+  let c1Volume = isBitrem ? Math.round(volumeCubado / 2) : Math.round(volumeCubado);
+  let c2Volume = isBitrem ? Math.round(volumeCubado - c1Volume) : 0;
 
   // Strict Pallet Distribution:
   // Format "X/Y" (e.g. 24/24) -> C1 = X (24), C2 = Y (24), Total = X+Y (48), do NOT divide by 2!
@@ -669,6 +669,13 @@ export function parseExcelOrder(dataBuffer: ArrayBuffer | Uint8Array): ParseOrde
   const numeroPallets = palletDist.totalPallets;
   const c1Pallets = palletDist.c1Pallets;
   const c2Pallets = isBitrem ? palletDist.c2Pallets : 0;
+
+  // Enforce 82m³ minimum volume per trailer if total pallet capacity is 48
+  if (isBitrem && numeroPallets === 48) {
+    c1Volume = Math.max(82, c1Volume);
+    c2Volume = Math.max(82, c2Volume);
+    volumeCubado = c1Volume + c2Volume;
+  }
 
   const c1Pbt = isBitrem ? Number((pbt / 2).toFixed(1)) : pbt;
   const c2Pbt = isBitrem ? Number((pbt - c1Pbt).toFixed(1)) : 0;
@@ -761,8 +768,8 @@ export function normalizeOrdemColetaItem(item: any, id?: string): import('../typ
 
   // If item already has structured c1 and c2
   if (item.c1 && typeof item.c1 === 'object') {
-    const c1Vol = Number(item.c1.volume) || (isBitrem ? Math.round(rawVol / 2) : rawVol);
-    const c2Vol = item.c2 ? (Number(item.c2.volume) || Math.round(rawVol - c1Vol)) : 0;
+    let c1Vol = Number(item.c1.volume) || (isBitrem ? Math.round(rawVol / 2) : rawVol);
+    let c2Vol = item.c2 ? (Number(item.c2.volume) || Math.round(rawVol - c1Vol)) : 0;
     const totalV = Number(item.volume_total) || (c1Vol + c2Vol);
 
     let c1Pal = item.c1.pallets;
@@ -790,6 +797,12 @@ export function normalizeOrdemColetaItem(item: any, id?: string): import('../typ
 
     const totalPal = isBitrem ? (Number(c1Pal) + Number(c2Pal)) : Number(c1Pal);
 
+    // Enforce 82m³ minimum volume per trailer if total pallet capacity is 48
+    if (isBitrem && totalPal === 48) {
+      c1Vol = Math.max(82, c1Vol);
+      c2Vol = Math.max(82, c2Vol);
+    }
+
     return {
       id: item.id || id,
       tipo_veiculo: isBitrem ? 'BITREM' : 'SINGLE',
@@ -814,7 +827,7 @@ export function normalizeOrdemColetaItem(item: any, id?: string): import('../typ
         modelo: (item.c2_modelo || item.modelo_carreta || 'SIDER').trim().toUpperCase(),
         pallets: c2Pal,
         pbt: Number((rawPbt / 2).toFixed(1)),
-        volume: Math.round(rawVol / 2)
+        volume: c2Vol
       } : null),
       volume_total: totalV,
       created_at: item.created_at || Date.now(),
@@ -834,10 +847,6 @@ export function normalizeOrdemColetaItem(item: any, id?: string): import('../typ
   const p1 = item.c1_placa ? normalizePlate(item.c1_placa) : (plates[0] || '');
   const p2 = item.c2_placa ? normalizePlate(item.c2_placa) : (plates[1] || '');
 
-  const c1Vol = Number(item.c1_volume) || (isBitrem ? Math.round(rawVol / 2) : rawVol);
-  const c2Vol = Number(item.c2_volume) || (isBitrem ? Math.round(rawVol - c1Vol) : 0);
-  const totalV = Number(item.volume_total) || (c1Vol + c2Vol) || rawVol;
-
   const rawPalVal = item.numero_pallets !== undefined ? item.numero_pallets : (item.pallets !== undefined ? item.pallets : (item.c1_pallets !== undefined ? item.c1_pallets : 0));
   let c1Pal: number;
   let c2Pal: number;
@@ -850,6 +859,16 @@ export function normalizeOrdemColetaItem(item: any, id?: string): import('../typ
     c2Pal = isBitrem ? pDist.c2Pallets : 0;
   }
   const totalPal = isBitrem ? (c1Pal + c2Pal) : c1Pal;
+
+  let c1Vol = Number(item.c1_volume) || (isBitrem ? Math.round(rawVol / 2) : rawVol);
+  let c2Vol = Number(item.c2_volume) || (isBitrem ? Math.round(rawVol - c1Vol) : 0);
+  const totalV = Number(item.volume_total) || (c1Vol + c2Vol) || rawVol;
+
+  // Enforce 82m³ minimum volume per trailer if total pallet capacity is 48
+  if (isBitrem && totalPal === 48) {
+    c1Vol = Math.max(82, c1Vol);
+    c2Vol = Math.max(82, c2Vol);
+  }
 
   const c1Pbt = item.c1_pbt !== undefined ? item.c1_pbt : (isBitrem ? Number((rawPbt / 2).toFixed(1)) : rawPbt);
   const c2Pbt = item.c2_pbt !== undefined ? item.c2_pbt : (isBitrem ? Number((rawPbt - (Number(c1Pbt) || 0)).toFixed(1)) : 0);
@@ -1025,6 +1044,12 @@ export function parseBitremData(input: {
         numPbt1 = 0;
         numPbt2 = 0;
       }
+    }
+
+    // Enforce 82m³ minimum volume per trailer if total pallet capacity is 48
+    if (totalPal === 48) {
+      numV1 = Math.max(82, numV1);
+      numV2 = Math.max(82, numV2);
     }
 
     // Modelos

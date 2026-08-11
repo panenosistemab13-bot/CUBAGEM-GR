@@ -282,17 +282,26 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onTabChan
             extractedC2Pal = pDist.c2Pallets;
           }
 
+          const is48Pallets = (Number(extractedC1Pal) + Number(extractedC2Pal)) === 48;
+          let initialVolC1 = extracted.c1?.volume ?? extracted.c1_volume ?? Math.round((extracted.volume_cubado || 0) / 2) ?? '';
+          let initialVolC2 = extracted.c2?.volume ?? extracted.c2_volume ?? Math.round((extracted.volume_cubado || 0) - (Number(extracted.c1?.volume) || 0)) ?? '';
+
+          if (is48Pallets) {
+            initialVolC1 = Math.max(82, Number(initialVolC1) || 0);
+            initialVolC2 = Math.max(82, Number(initialVolC2) || 0);
+          }
+
           setC1({
             placa: extracted.c1?.placa || extracted.c1_placa || extracted.placa_carreta.split('/')[0]?.trim() || '',
             modelo: extracted.c1?.modelo || extracted.c1_modelo || extracted.modelo_carreta || 'SIDER',
-            volume: extracted.c1?.volume ?? extracted.c1_volume ?? Math.round((extracted.volume_cubado || 0) / 2) ?? '',
+            volume: initialVolC1,
             pallets: extractedC1Pal ?? '',
             pbt: extracted.c1?.pbt ?? extracted.c1_pbt ?? Number(((extracted.pbt || 0) / 2).toFixed(1)) ?? ''
           });
           setC2({
             placa: extracted.c2?.placa || extracted.c2_placa || extracted.placa_carreta.split('/')[1]?.trim() || '',
             modelo: extracted.c2?.modelo || extracted.c2_modelo || extracted.modelo_carreta || 'SIDER',
-            volume: extracted.c2?.volume ?? extracted.c2_volume ?? Math.round((extracted.volume_cubado || 0) - (Number(extracted.c1?.volume) || 0)) ?? '',
+            volume: initialVolC2,
             pallets: extractedC2Pal ?? '',
             pbt: extracted.c2?.pbt ?? extracted.c2_pbt ?? Number(((extracted.pbt || 0) - (Number(extracted.c1?.pbt) || 0)).toFixed(1)) ?? ''
           });
@@ -495,6 +504,30 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onTabChan
               pDist.c2Pallets;
           }
 
+          const is48Pallets = (Number(extractedC1Pal) + Number(extractedC2Pal)) === 48;
+          let initialVolC1 =
+            extracted.c1?.volume ??
+            extracted.c1_volume ??
+            Math.round(
+              (Number(
+                extracted.volume_cubado
+              ) || 0) / 2
+            );
+
+          let initialVolC2 =
+            extracted.c2?.volume ??
+            extracted.c2_volume ??
+            Math.round(
+              (Number(
+                extracted.volume_cubado
+              ) || 0) / 2
+            );
+
+          if (is48Pallets) {
+            initialVolC1 = Math.max(82, Number(initialVolC1) || 0);
+            initialVolC2 = Math.max(82, Number(initialVolC2) || 0);
+          }
+
           setC1({
             placa:
               extracted.c1?.placa ||
@@ -510,14 +543,7 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onTabChan
               extracted.modelo_carreta ||
               'SIDER',
 
-            volume:
-              extracted.c1?.volume ??
-              extracted.c1_volume ??
-              Math.round(
-                (Number(
-                  extracted.volume_cubado
-                ) || 0) / 2
-              ),
+            volume: initialVolC1,
 
             pallets:
               extractedC1Pal || '',
@@ -549,14 +575,7 @@ export default function OrdemColeta({ currentUser, isReadOnly = false, onTabChan
               extracted.modelo_carreta ||
               'SIDER',
 
-            volume:
-              extracted.c2?.volume ??
-              extracted.c2_volume ??
-              Math.round(
-                (Number(
-                  extracted.volume_cubado
-                ) || 0) / 2
-              ),
+            volume: initialVolC2,
 
             pallets:
               extractedC2Pal || '',
