@@ -1407,8 +1407,8 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
         });
 
         parsed.carretas.forEach(c => {
-          const cleanCarreta = c.placa.replace(/[\s-]/g, '').toUpperCase();
-          const existsInDb = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === cleanCarreta);
+          const cleanCarreta = c.placa.replace(/[^A-Z0-9]/g, '').toUpperCase();
+          const existsInDb = cubagemData.some(item => (item.carreta || '').replace(/[^A-Z0-9]/g, '').toUpperCase() === cleanCarreta);
           const isDuplicateInBatch = processedCarretasInBatch.has(cleanCarreta);
 
           previewList.push({
@@ -1431,8 +1431,8 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
         });
       } else if (carretaPlates.length === 1 && m3Value) {
         const carreta = carretaPlates[0];
-        const cleanCarreta = carreta.replace(/[\s-]/g, '').toUpperCase();
-        const existsInDb = cubagemData.some(item => item.carreta.replace(/[\s-]/g, '').toUpperCase() === cleanCarreta);
+        const cleanCarreta = carreta.replace(/[^A-Z0-9]/g, '').toUpperCase();
+        const existsInDb = cubagemData.some(item => (item.carreta || '').replace(/[^A-Z0-9]/g, '').toUpperCase() === cleanCarreta);
         const isDuplicateInBatch = processedCarretasInBatch.has(cleanCarreta);
 
         previewList.push({ 
@@ -1509,6 +1509,8 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
       }
     }
 
+    const skippedCount = parsedPreviewItems.length - addedCount;
+
     setLastImportedIds(newlyAddedIds);
     setParsedPreviewItems([]);
     setIsShowingPreview(false);
@@ -1516,7 +1518,7 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
 
     setCubagemStatusMsg({
       type: 'success',
-      text: `Importação concluída! ${addedCount} registros de cubagem adicionados com sucesso!`
+      text: `Importação concluída! ${addedCount} novas cubagens adicionadas com sucesso.${skippedCount > 0 ? ` ${skippedCount} placas já cadastradas anteriormente foram preservadas/mantidas intactas.` : ''}`
     });
     setTimeout(() => setCubagemStatusMsg(null), 6000);
   };
@@ -3590,7 +3592,7 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                     </div>
 
                     <p className="text-[10px] font-bold text-[#5c3c24]/80 leading-relaxed uppercase">
-                      Abaixo está a lista de veículos identificados. Verifique se as colunas foram mapeadas corretamente. Duplicidades conhecidas serão identificadas.
+                      Abaixo está a lista de veículos identificados. Placas que já possuem cubagem no aplicativo serão mantidas sem alterações. Apenas novas placas serão adicionadas.
                     </p>
 
                     {/* Compact Scrollable Preview List */}
@@ -3613,9 +3615,9 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                             <div className="flex items-center gap-3">
                               <span className="text-[#ca1a20] font-black">{item.m3} M³</span>
                               {item.status === 'duplicate' ? (
-                                <span className="text-[8px] bg-rose-100 border border-rose-300 text-rose-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">Duplicado</span>
+                                <span className="text-[8px] bg-amber-100 border border-amber-300 text-amber-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">MANTIDO (JÁ EXISTE NO APP)</span>
                               ) : (
-                                <span className="text-[8px] bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">Pronto</span>
+                                <span className="text-[8px] bg-emerald-100 border border-emerald-300 text-emerald-800 font-bold px-1.5 py-0.5 rounded uppercase font-sans">ADICIONAR (NOVO)</span>
                               )}
                             </div>
                           </div>
@@ -3633,8 +3635,9 @@ export default function Patio({ onBack, isReadOnly = false, currentUser }: Patio
                     </div>
 
                     {/* Preview Warning */}
-                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-[9px] text-amber-800 leading-relaxed font-bold uppercase tracking-wider">
-                      * Nota: Placas sem cubagem (M³ vazia) foram ignoradas automaticamente conforme as regras do aplicativo.
+                    <div className="p-3 bg-amber-50 border border-amber-300 rounded-xl text-[9px] text-amber-800 leading-relaxed font-bold uppercase tracking-wider space-y-1">
+                      <div>* NOTA: Placas já cadastradas no aplicativo serão mantidas intactas (sem alteração) e somente placas novas que ainda não existem no app serão integradas ao salvar.</div>
+                      <div>* Placas sem cubagem (M³ vazia) foram ignoradas automaticamente conforme as regras do aplicativo.</div>
                     </div>
 
                     {/* Double Control Buttons for STOP/CANCEL vs IMPORT */}
